@@ -48,7 +48,7 @@ class ThreadPool:
 		for thread in self.__thread_objs.values():
 			thread.start()
 
-	
+
 	def stop(self):
 		self.__interrupt.set()
 		for thread in self.__thread_objs.values():
