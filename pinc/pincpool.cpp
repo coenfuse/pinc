@@ -38,7 +38,6 @@ class ThreadPool
 
     private:
         void __runtime(const uint16_t& thread_id);
-        const uint16_t __get_candidate_thread() const;
 
     private:
         uint16_t m_size;
@@ -95,7 +94,7 @@ ThreadPool::ThreadPool(const uint16_t size)
 }
 
 void ThreadPool::start() {
-    m_interrupt = false;
+    m_interrupt.store(false);
     for (auto index = 0; index < m_size; index++) {
         m_pool.push_back(std::thread(
             &ThreadPool::__runtime,
@@ -106,48 +105,34 @@ void ThreadPool::start() {
 }
 
 void ThreadPool::stop(bool force) {
-    m_interrupt = true;
+    m_interrupt.store(true);
 }
 
 void ThreadPool::run_task(const Task& task)
 {
-    const auto thread_id = __get_candidate_thread();
+    uint16_t thread_id = m_last_used_thread_id.fetch_add(1) % m_size;
     {
         std::unique_lock<std::mutex> lock(*m_mxcv[thread_id].first);
         m_jobs[thread_id].push(task);
     }
-    m_last_used_thread_id.store(thread_id);
     (*m_mxcv[thread_id].second).notify_one();
 }
 
 void ThreadPool::__runtime(const uint16_t& thread_id)
 {
     Task task;
-
-    /*
-    while (!m_interrupt)
-    {
-        {
-            std::unique_lock<std::mutex> lock(*m_mxcv[thread_id].first);
-            if (m_jobs[thread_id].empty())
-                continue;
-            task = m_jobs[thread_id].front();
-            m_jobs[thread_id].pop();
-        }
-        task.execute();
-    }
-    */
-
     while (true)
     {
         {
             std::unique_lock<std::mutex> lock(*m_mxcv[thread_id].first);
             (*m_mxcv[thread_id].second).wait(
-                lock, 
-                [&]() { return !m_jobs[thread_id].empty() || m_interrupt; }
+                lock,
+                [&]() { 
+                    return !m_jobs[thread_id].empty() || m_interrupt.load(); 
+                }
             );
 
-            if (m_interrupt) {
+            if (m_interrupt.load()) {
                 return;
             }
 
@@ -155,16 +140,6 @@ void ThreadPool::__runtime(const uint16_t& thread_id)
             m_jobs[thread_id].pop();
         }
         task.execute();
-    }
-}
-
-const uint16_t ThreadPool::__get_candidate_thread() const
-{
-    if (m_last_used_thread_id.load() == m_size - 1) {
-        return 0;
-    }
-    else {
-        return m_last_used_thread_id.load() + 1;
     }
 }
 
