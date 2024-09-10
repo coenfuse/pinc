@@ -1,7 +1,9 @@
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <queue>
 #include <thread>
 
@@ -18,11 +20,15 @@ struct Task
 
 struct ThreadPool
 {
-    uint16_t m_size = 1;
+    std::mutex m_mtx;
     bool m_interrupted = false;
+    std::condition_variable m_cv;
+
+    uint16_t m_size = 1;
     uint16_t m_last_used_thread = 0;
     std::map<uint16_t, std::thread> m_pool;
     std::map<uint16_t, std::queue<Task>> m_jobs;
+    std::map<uint16_t, std::pair<std::condition_variable, std::mutex>> m_ctrl;
 };
 
 
@@ -37,17 +43,19 @@ void initialize_pool(ThreadPool& pool, const uint16_t& size)
 
 void thread_pool_runtime(ThreadPool& pool, uint16_t thread_id)
 {
-    std::cout << "running thread -> " <<  thread_id << std::endl;
-    while (!pool.m_interrupted) 
+    Task task;
+    while (!pool.m_interrupted)
     {
-        try 
         {
-            if (!pool.m_jobs[thread_id].empty()) 
-            {
-                const Task& task = pool.m_jobs[thread_id].front();
-                task.fptr(task.param);
-                pool.m_jobs[thread_id].pop();
-            }
+            const std::lock_guard<std::mutex> lock(pool.m_mtx);
+            if (pool.m_jobs[thread_id].empty())
+                continue;
+            task = pool.m_jobs[thread_id].front();
+            pool.m_jobs[thread_id].pop();
+        }
+
+        try {
+            task.fptr(task.param);
         }
         catch (...)
         {}
@@ -88,7 +96,7 @@ const uint16_t add_task(ThreadPool& pool, const Task& task)
 {
     const uint16_t worker_thread_id = compute_worker_thread(pool);
     {
-        // add mutex lock here for safety
+        const std::lock_guard<std::mutex> lock(pool.m_mtx);
         pool.m_jobs[worker_thread_id].push(task);
     }
     pool.m_last_used_thread = worker_thread_id;
@@ -108,13 +116,13 @@ void long_job(const uint16_t duration)
 int main()
 {
     ThreadPool pool = ThreadPool();
-    initialize_pool(pool, 16);
+    initialize_pool(pool, std::thread::hardware_concurrency());
     start_pool(pool);
 
-    for (uint16_t i = 0; i < 16; i++) {
+    for (uint16_t i = 0; i < 64; i++) {
         Task t = Task();
         t.fptr = &long_job;
-        t.param = 1;
+        t.param = 1 + (i % 2);
         add_task(pool, t);
     }
 
