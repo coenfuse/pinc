@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -71,7 +72,12 @@ namespace coen
 
         // TODO : description
         template <typename t_TYPE = void, typename... t_ARGS>
-        Awaitable<> gather(const std::vector<Awaitable<t_TYPE, t_ARGS...>> awaitables);
+        Awaitable<> gather(
+            const std::vector<Awaitable<t_TYPE, t_ARGS...>> awaitables);
+
+        template <typename t_TYPE = void, typename... t_ARGS>
+        Awaitable<> gather(
+            const std::initializer_list<Awaitable<t_TYPE, t_ARGS...>> awaitables);
 
         // TODO : description
         template <typename Rep, typename Period>
@@ -79,11 +85,15 @@ namespace coen
         
         // TODO : description
         template <typename t_TYPE = void, typename... t_ARGS>
-        Awaitable<> to_thread(const Task& task, const bool lazy = true);
+        Awaitable<t_TYPE> to_thread(
+            const std::function<t_TYPE(t_ARGS...)> task, 
+            const bool lazy = true);
         
         // TODO : description
         template <typename t_TYPE = void, typename... t_ARGS, typename Rep, typename Period>
-        Awaitable<> wait_until(Awaitable<t_TYPE, t_ARGS...> awaitable, const std::chrono::duration<Rep, Period>& duration);
+        Awaitable<> wait_until(
+            Awaitable<t_TYPE, t_ARGS...> awaitable, 
+            const std::chrono::duration<Rep, Period>& duration);
 
         // ---------------------------------------------------------------------
         // PINC internal vars
@@ -100,45 +110,7 @@ namespace coen
 // Types Interface Declaration
 // -----------------------------------------------------------------------------
 
-template <typename t_TYPE = void, typename ... t_ARGS>
-class coen::pinc::Awaitable
-{
-    public:
-        t_TYPE get_result() {
-            return m_future.get_value();
-        }
-
-        void execute() {
-            try {
-                m_future.set_value(m_handle(m_params));
-            }
-            catch (...) {
-                m_future.set_exception(std::current_exception());
-            }
-        }
-
-    public:
-        Awaitable(
-            std::function<t_TYPE(t_ARGS ...)> handle, 
-            std::vector<void*> params,
-        ) {
-            m_params = std::move(params);
-            m_handle = std::move(handle);
-        }
-
-        ~Awaitable() {
-            m_promise.set_value(t_TYPE());
-        }
-
-    private:
-        coen::pinc::Future<t_TYPE> m_future;
-        std::tuple<t_ARGS...> m_params;
-        std::function<t_TYPE(t_ARGS ...)> m_handle;
-};
-
-
-
-template <typename t_TYPE = void, typename... t_ARGS>
+template <typename t_TYPE, typename... t_ARGS>
 class coen::pinc::Awaitable
 {
     public:
