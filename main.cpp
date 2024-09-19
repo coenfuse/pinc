@@ -1,14 +1,23 @@
 #include <iostream>
 #include "pinc/pinc.hpp"
 
+// #define async pinc::Awaitable
+// #define await pinc::await
 using namespace coen;
+
 
 pinc::Awaitable<> coro_loop(const size_t length) 
 {
-    for (size_t itr = 0; itr <= length; itr++) {
-        std::cout << "coro[" << length << "] -> itr " << itr << std::endl;
-        pinc::await(pinc::sleep(std::chrono::seconds(1)));
-    }
+    return pinc::Awaitable<>(
+        [&](size_t length)
+        {
+            for (size_t itr = 0; itr <= length; itr++) 
+            {
+                std::cout << "coro[" << length << "] -> itr " << itr << std::endl;
+                pinc::await(pinc::sleep(std::chrono::seconds(1)));
+            }
+        }
+    );
 }
 
 void sync_job()
@@ -20,12 +29,16 @@ void sync_job()
 
 pinc::Awaitable<> root()
 {
-    std::vector<pinc::Awaitable<>> tasks;
-    for (int i = 0; i < 3; i++) {
-        tasks.push_back(coro_loop(i * i));
-    }
-    tasks.push_back(pinc::to_thread(std::function<void()>(&sync_job)));
-    pinc::await(pinc::gather(tasks));
+    return pinc::Awaitable<>(
+        [](){
+            std::vector<pinc::Awaitable<>> tasks;
+            for (int i = 0; i < 3; i++) {
+                tasks.push_back(coro_loop(i * 1));
+            }
+            tasks.push_back(pinc::to_thread(std::function<void()>(&sync_job)));
+            pinc::await(pinc::gather(tasks));
+        }
+    );
 }
 
 int main() {

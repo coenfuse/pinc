@@ -115,6 +115,7 @@ class coen::pinc::Awaitable
 {
     public:
         Awaitable();
+        Awaitable(std::function<>);
         ~Awaitable();
 
     public:
