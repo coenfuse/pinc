@@ -17,9 +17,9 @@
 #include <vector>
 
 
-namespace coen 
+namespace coen
 {
-    namespace pinc 
+    namespace pinc
     {
         // ---------------------------------------------------------------------
         // Types declaration
@@ -52,56 +52,79 @@ namespace coen
         // ---------------------------------------------------------------------
         // PINC runtime APIs
         // ---------------------------------------------------------------------
-         
+
         // TODO : description
         int start(
-            const Awaitable<> awaitable, 
+            const Awaitable<> awaitable,
             size_t poolsize = std::thread::hardware_concurrency()
         );
-        
+
         // TODO : description
-        int stop(bool force = true);
+        int stop(
+            bool force = true
+        );
 
         // ---------------------------------------------------------------------
         // PINC behavioral APIs
         // ---------------------------------------------------------------------
-        
+
         // TODO : description
         template <typename t_TYPE = void, typename... t_ARGS>
-        t_TYPE await(Awaitable<t_TYPE, t_ARGS...> awaitable);
+        t_TYPE await(
+            Awaitable<t_TYPE, t_ARGS...> awaitable
+        );
+
+        // TODO : description
+        template <typename t_TYPE = void, typename... t_ARGS>
+        int add_task(
+            Awaitable<t_TYPE, t_ARGS...> awaitable
+        );
 
         // TODO : description
         template <typename t_TYPE = void, typename... t_ARGS>
         Awaitable<> gather(
-            const std::vector<Awaitable<t_TYPE, t_ARGS...>> awaitables);
+            const std::vector<Awaitable<t_TYPE, t_ARGS...>> awaitables
+        );
 
         template <typename t_TYPE = void, typename... t_ARGS>
         Awaitable<> gather(
-            const std::initializer_list<Awaitable<t_TYPE, t_ARGS...>> awaitables);
+            const std::initializer_list<Awaitable<t_TYPE, t_ARGS...>> awaitables
+        );
 
         // TODO : description
         template <typename Rep, typename Period>
-        Awaitable<> sleep(const std::chrono::duration<Rep, Period>& duration);
-        
+        Awaitable<> sleep(
+            const std::chrono::duration<Rep, Period>& duration
+        );
+
         // TODO : description
         template <typename t_TYPE = void, typename... t_ARGS>
         Awaitable<t_TYPE> to_thread(
-            const std::function<t_TYPE(t_ARGS...)> task, 
-            const bool lazy = true);
-        
-        // TODO : description
+            const std::function<t_TYPE(t_ARGS...)> task,
+            const bool lazy = true
+        );
+
+        // wait until a confirmed timeout in future to execute the awaitable
+	// TODO : consider it implementing via wait_for() for simplicity
         template <typename t_TYPE = void, typename... t_ARGS, typename Rep, typename Period>
         Awaitable<> wait_until(
-            Awaitable<t_TYPE, t_ARGS...> awaitable, 
-            const std::chrono::duration<Rep, Period>& duration);
+            Awaitable<t_TYPE, t_ARGS...> awaitable,
+            const std::chrono::duration<Rep, Period>& duration
+        );
+
+	// wait until an unconfirmed condition in future to executre the awaitable
+	template <typename t_TYPE = void, typename... t_ARGS>
+	Awaitable<> wait_for(
+		Awaitable<t_TYPE, t_ARGS...> awaitable,
+		const Event& event
+	);
 
         // ---------------------------------------------------------------------
         // PINC internal vars
         // ---------------------------------------------------------------------
-        
+
         // Scheduler i_scheduler;
         Pool i_pool;
-
     };
 };
 
@@ -115,7 +138,7 @@ class coen::pinc::Awaitable
 {
     public:
         Awaitable();
-        Awaitable(std::function<>);
+        Awaitable(std::function<t_TYPE(t_ARGS...)>);
         ~Awaitable();
 
     public:
@@ -143,7 +166,7 @@ class coen::pinc::Event
         bool is_set();
         void clear();
         void wait();
-    
+
     private:
         std::atomic_bool m_val;
 };
