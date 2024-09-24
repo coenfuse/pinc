@@ -30,6 +30,10 @@ namespace coen
         class Awaitable;
 
         // TODO : description
+        template <typename... t_ARGS>
+        class Condition;
+
+        // TODO : description
         class Event;
 
         // TODO : description
@@ -105,19 +109,34 @@ namespace coen
         );
 
         // wait until a confirmed timeout in future to execute the awaitable
-	// TODO : consider it implementing via wait_for() for simplicity
+	    // TODO : consider it implementing via wait_for() for simplicity
         template <typename t_TYPE = void, typename... t_ARGS, typename Rep, typename Period>
         Awaitable<> wait_until(
             Awaitable<t_TYPE, t_ARGS...> awaitable,
             const std::chrono::duration<Rep, Period>& duration
         );
 
-	// wait until an unconfirmed condition in future to executre the awaitable
-	template <typename t_TYPE = void, typename... t_ARGS>
-	Awaitable<> wait_for(
-		Awaitable<t_TYPE, t_ARGS...> awaitable,
-		const Event& event
-	);
+	    // wait until an unconfirmed event in future to execute the awaitable
+	    template <typename t_TYPE = void, typename... t_ARGS>
+	    Awaitable<> wait_for(
+		    Awaitable<t_TYPE, t_ARGS...> awaitable,
+		    const Event& event
+	    );
+
+        // wait until an unconfirmed condition to become true to execute the awaitable
+        template <typename t_TYPE = void, typename... t_ARGS, typename... tc_ARGS>
+        Awaitable<> wait_for(
+            Awaitable<t_TYPE, t_ARGS ...> awaitable,
+            const Condition<tc_ARGS...>& condition
+        );
+
+        // immediately execute an awaitable blocking the caller thread seperate
+        // from the core scheduler. This can be useful where a synchronous section
+        // of a code requires to something from an asychronous code
+        template <typename t_TYPE = void, typename... t_ARGS>
+        t_TYPE sync(
+            Awaitable<t_TYPE, t_ARGS...> awaitable
+        );
 
         // ---------------------------------------------------------------------
         // PINC internal vars
@@ -154,6 +173,22 @@ class coen::pinc::Awaitable
 };
 
 
+template <typename... t_ARGS>
+class coen::pinc::Condition
+{
+    public:
+        Condition(const std::function<t_TYPE<t_ARGS...>> predicate);
+        ~Condition();
+
+    public:
+        Awaitable<> wait();
+        void resolve();                                                         // forceful bypass that could be useful during shutdown
+        
+    private:
+        std::function<bool<t_ARGS...>> m_predicate;
+};
+
+
 
 class coen::pinc::Event
 {
@@ -165,7 +200,7 @@ class coen::pinc::Event
         void set();
         bool is_set();
         void clear();
-        void wait();
+        Awaitable<> wait();
 
     private:
         std::atomic_bool m_val;
