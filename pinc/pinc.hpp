@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <coroutine>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -37,6 +38,9 @@ namespace coen
         class Event;
 
         // TODO : description
+        // If you add a timeout to future, it behaves as a timed awaitable
+        // If you don't add a timeout, it behaves as a promise that promises you
+        // to return a response in future, but not sure when
         template <typename t_TYPE = void>
         class Future;
 
