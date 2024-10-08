@@ -197,11 +197,6 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
         );
 
         // -- docs --
-        // std::suspend_always await_transform(
-        //     coen::pinc::coroutine<t_TYPE, t_ARGS...> rhs_coro
-        // );
-
-        // -- docs --
         std::suspend_always yield_value(
             t_TYPE rhs_value
         );
@@ -300,15 +295,6 @@ std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::fina
 {
     return {};
 }
-
-
-// template <typename t_TYPE, typename... t_ARGS>
-// std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::await_transform(
-//     coen::pinc::coroutine<t_TYPE, t_ARGS...> rhs_coro
-// )
-// {
-//     return {};
-// }
 
 
 template <typename t_TYPE, typename... t_ARGS>
