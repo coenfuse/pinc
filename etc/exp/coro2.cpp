@@ -1,10 +1,9 @@
 #include <coroutine>
 #include <iostream>
+#include <string>
 
-struct Event {
-	// you could put a description of a specific event in here
-};
 
+/*
 class Awaitable 
 {
 	public:
@@ -25,6 +24,7 @@ class Awaitable
 		// contains local context, suspension, resume points etc.
 		Awaitable get_return_object()
 		{
+			std::cout << "inside awaitable::promise_type::get_return_object" << std::endl;
 			auto handle = handle_type::from_promise(*this);
 			return Awaitable(handle);
 		}
@@ -64,7 +64,7 @@ class Awaitable
 		}
 			
 		// this method basically resolves co_await
-		std::suspend_always await_transform(Event)
+		std::suspend_always await_transform(Awaitable)
 		{
 			// you could write code here that adjusted the main
 			// program's data structures to ensure the coroutine would
@@ -76,6 +76,7 @@ class Awaitable
 	private:
 
 	handle_type m_handle;
+	std::string m_name;
 
 	// constructor intentionally made private so that only class's
 	// internal methods and members (promise_type) can initialize it
@@ -84,10 +85,17 @@ class Awaitable
 	// the user outside of Awaitable doesn't have to change any code
 	Awaitable(handle_type handle) : 
 		m_handle(handle) 
-		{}
+		{
+			m_name = "auto_coro";
+			std::cout << "new auto_coro created" << std::endl;
+		}
 
 	public:
-			
+	Awaitable(){
+		m_name = "manu_coro";
+		std::cout << "new manu_coro created" << std::endl;
+	}		
+	
 	void resume() {
 		m_handle.resume();
 	}
@@ -95,7 +103,7 @@ class Awaitable
 
 Awaitable coroutine() {
 	std::cout << "in coroutine" << std::endl;
-	co_await Event{};
+	co_await Awaitable();
 	std::cout << "resumed coroutine and exiting now" << std::endl;
 }
 
@@ -110,7 +118,7 @@ int main() {
 
 	std::cout << "we're back in main() and now terminating" << std::endl;
 }
-
+*/
 
 
 /*
@@ -136,3 +144,118 @@ int main():
 		else:
 			task.destroy()
 */
+
+
+namespace pinc
+{
+	template <char ID = '-'>
+	class UserFacing;
+
+	template <char ID = '-'>
+	class promise_type;
+}
+
+template <char ID>
+class pinc::UserFacing
+{
+	public:
+	using promise_type = pinc::promise_type<ID>;
+	using handle_type = std::coroutine_handle<promise_type>;
+	friend promise_type;
+
+	private:
+	explicit UserFacing(handle_type handle){
+		std::cout << "[" << ID << "] creating UserFacing Awaitable from handle provided by internal promise" << std::endl;
+		m_handle = handle;
+	}
+
+	private:
+	handle_type m_handle;
+
+	public:
+
+	~UserFacing() noexcept {
+		std::cout << "[" << ID << "] coro complete, deleting handle" << std::endl;
+		m_handle.destroy();
+	}
+
+	void resume(){
+		std::cout << "[" << ID << "] trying to resume coro from caller" << std::endl;
+		if (!m_handle.done()) {
+			m_handle.resume();
+		}
+	}
+};
+
+template <char ID>
+class pinc::promise_type
+{
+	public:
+
+	pinc::UserFacing<ID> get_return_object()
+	{
+		std::cout << "[" << ID << "] creating a handle for coro and returning to caller wrapped inside an awaitable" << std::endl;
+		auto m_handle = pinc::UserFacing<ID>::handle_type::from_promise(*this);
+		return UserFacing<ID>(m_handle);
+	}
+
+	std::suspend_always initial_suspend() {
+		std::cout << "[" << ID << "] performing initial suspend" << std::endl;
+		return {};
+	}
+
+	void return_void() {
+		std::cout << "[" << ID << "] handling void return" << std::endl;
+	}
+
+	void unhandled_exception() noexcept
+	{}
+
+	std::suspend_always final_suspend() noexcept {
+		std::cout << "[" << ID << "] performing final suspend" << std::endl;
+		// m_handle.destroy();
+		return {};
+	}
+
+	std::suspend_always await_transform(pinc::UserFacing<ID> awaitable) {
+		std::cout << "[" << ID << "] suspending coro with awaitable UserFacing" << std::endl;
+		awaitable.resume();
+		return {};
+	}
+
+	std::suspend_always yield_value(int value) {
+		return {};
+	}
+
+	// private:
+	// typename pinc::UserFacing<ID>::handle_type m_handle;
+};
+
+
+pinc::UserFacing<'f'> baz() {
+	std::cout << "in baz" << std::endl;
+	co_return;
+}
+
+
+pinc::UserFacing<'f'> foo() {
+	std::cout << "in coro" << std::endl;
+	co_await baz();
+	
+	std::cout << "back in coro" << std::endl;
+	co_return;
+}
+
+
+int main() 
+{
+	pinc::UserFacing<'f'> instance = foo();
+
+	std::cout << "in main" << std::endl;
+	instance.resume();
+
+	std::cout << "back in main" << std::endl;
+	instance.resume();
+
+	std::cout << "again back in main" << std::endl;
+}

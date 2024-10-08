@@ -1,310 +1,332 @@
-// preprocessor directives
+/* -- COPYRIGHT AND LEGAL -- */
+
+// preprocessor flags
 #pragma once
 
-// standard imports
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
+#include <array>
 #include <coroutine>
-#include <cstdint>
-#include <deque>
 #include <functional>
-#include <initializer_list>
-#include <memory>
-#include <mutex>
 #include <queue>
 #include <thread>
-#include <tuple>
-#include <vector>
 
 
 namespace coen
 {
     namespace pinc
     {
-        // ---------------------------------------------------------------------
-        // Types declaration
-        // ---------------------------------------------------------------------
-
-        // TODO : description
-        template <typename t_TYPE = void, typename... t_ARGS>
-        class Awaitable;
-
-        // TODO : description
-        template <typename... t_ARGS>
-        class Condition;
-
-        // TODO : description
-        class Event;
-
-        // TODO : description
-        // If you add a timeout to future, it behaves as a timed awaitable
-        // If you don't add a timeout, it behaves as a promise that promises you
-        // to return a response in future, but not sure when
-        template <typename t_TYPE = void>
-        class Future;
-
-        // TODO : description
-        class Pool;
-
-        // TODO : description
-        template <typename t_TYPE, typename... t_ARGS>
-        class Scheduler;
-
-        // TODO : description
-        class Task;
-
-        // TODO : description
-        class Timer;
+        // POSTULATES
+        //
+        // 1. Coroutine is a passive entity. When it is scheduled, it becomes a Task
 
         // ---------------------------------------------------------------------
-        // PINC runtime APIs
+        // TYPES
         // ---------------------------------------------------------------------
 
-        // TODO : description
+        // -- docs --
+        // template <
+        //     typename t_TYPE = void, 
+        //     typename... t_ARGS
+        // >
+        // class awaiter;
+
+        // template <>
+        // class condition;
+
+        // -- docs --
+        template <
+            typename t_TYPE = void, 
+            typename... t_ARGS
+        >
+        class coroutine;
+
+        // -- docs --
+        // class Event;
+
+        // -- docs --
+        // template <
+        //     typename t_TYPE = void, 
+        //     typename... t_ARGS
+        // >
+        // class Scheduler;
+
+        // -- docs --
+        // class ThreadPool;
+
+        // ---------------------------------------------------------------------
+        // EVENT-LOOP APIs
+        // ---------------------------------------------------------------------
+
+        // -- docs --
         int start(
-            const Awaitable<> awaitable,
+            const coroutine<> &coroutine,
             size_t poolsize = std::thread::hardware_concurrency()
         );
 
-        // TODO : description
+        // -- docs --
         int stop(
             bool force = true
         );
 
         // ---------------------------------------------------------------------
-        // PINC behavioral APIs
+        // FUNCTIONAL APIs
         // ---------------------------------------------------------------------
 
-        // TODO : description
-        template <typename t_TYPE = void, typename... t_ARGS>
-        t_TYPE await(
-            Awaitable<t_TYPE, t_ARGS...> awaitable
-        );
-
-        // TODO : description
-        template <typename t_TYPE = void, typename... t_ARGS>
+        // -- docs --
+        template <
+            typename t_TYPE = void, 
+            typename... t_ARGS
+        >
         int add_task(
-            Awaitable<t_TYPE, t_ARGS...> awaitable
+            const coroutine<> &coroutine
         );
 
-        // TODO : description
-        template <typename t_TYPE = void, typename... t_ARGS>
-        Awaitable<> gather(
-            const std::vector<Awaitable<t_TYPE, t_ARGS...>> awaitables
+        // -- docs --
+        template <
+            typename t_TYPE = void, 
+            size_t t_SIZE = 0, 
+            typename... t_ARGS
+        >
+        coroutine<std::array<t_TYPE, t_SIZE>> gather(
+            const std::array<coroutine<t_TYPE, t_ARGS...>, t_SIZE> coroutines
         );
 
-        template <typename t_TYPE = void, typename... t_ARGS>
-        Awaitable<> gather(
-            const std::initializer_list<Awaitable<t_TYPE, t_ARGS...>> awaitables
+        // -- docs --
+        template <
+            typename Rep,
+            typename Period
+        >
+        coroutine<> sleep(
+            const std::chrono::duration<Rep, Period> &duration
         );
 
-        // TODO : description
-        template <typename Rep, typename Period>
-        Awaitable<> sleep(
-            const std::chrono::duration<Rep, Period>& duration
-        );
-
-        // TODO : description
-        template <typename t_TYPE = void, typename... t_ARGS>
-        Awaitable<t_TYPE> to_thread(
-            const std::function<t_TYPE(t_ARGS...)> task,
+        // -- docs --
+        // bridge between sync to async code
+        template <
+            typename t_TYPE = void,
+            typename... t_ARGS
+        >
+        coroutine<t_TYPE> to_thread(
+            const std::function<void()> task,
             const bool lazy = true
         );
 
-        // wait until a confirmed timeout in future to execute the awaitable
-	    // TODO : consider it implementing via wait_for() for simplicity
-        template <typename t_TYPE = void, typename... t_ARGS, typename Rep, typename Period>
-        Awaitable<> wait_until(
-            Awaitable<t_TYPE, t_ARGS...> awaitable,
-            const std::chrono::duration<Rep, Period>& duration
-        );
-
-	    // wait until an unconfirmed event in future to execute the awaitable
-	    template <typename t_TYPE = void, typename... t_ARGS>
-	    Awaitable<> wait_for(
-		    Awaitable<t_TYPE, t_ARGS...> awaitable,
-		    const Event& event
-	    );
-
-        // wait until an unconfirmed condition to become true to execute the awaitable
-        template <typename t_TYPE = void, typename... t_ARGS, typename... tc_ARGS>
-        Awaitable<> wait_for(
-            Awaitable<t_TYPE, t_ARGS ...> awaitable,
-            const Condition<tc_ARGS...>& condition
-        );
-
+        // -- docs --
+        // bridge between async to sync
         // immediately execute an awaitable blocking the caller thread seperate
         // from the core scheduler. This can be useful where a synchronous section
         // of a code requires to something from an asychronous code
-        template <typename t_TYPE = void, typename... t_ARGS>
+        template <
+            typename t_TYPE = void,
+            typename... t_ARGS
+        >
         t_TYPE sync(
-            Awaitable<t_TYPE, t_ARGS...> awaitable
+            coroutine<t_TYPE, t_ARGS...> coroutine
+        );
+    }
+}
+
+// -----------------------------------------------------------------------------
+// TYPES INTERFACE
+// -----------------------------------------------------------------------------
+
+template <
+    typename t_TYPE, 
+    typename... t_ARGS
+>
+class coen::pinc::coroutine
+{
+    public:
+
+        // -- docs --
+        class promise_type;
+
+        // -- docs --
+        using t_handle = std::coroutine_handle<promise_type>; // <t_TYPE, t_ARGS...>>;
+
+    public:
+
+        // -- docs --
+        uint resume();
+
+        // -- docs --
+        bool done();
+
+        // -- docs --
+        uint destroy();
+
+        ~coroutine() noexcept;
+
+    private:
+
+        // -- docs --
+        bool i_is_resumable();
+    
+    private:
+
+        // -- docs --
+        explicit coroutine(t_handle handle);
+
+    private:
+        uint m_state;
+        t_handle m_handle;
+};
+
+
+template <
+    typename t_TYPE,
+    // typename t_TYPE_rhs,
+    typename... t_ARGS
+>
+class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+{
+    public:
+
+        // -- docs --
+        coen::pinc::coroutine<t_TYPE, t_ARGS...> get_return_object();
+        
+        // -- docs --
+        std::suspend_always initial_suspend();
+        
+        // -- docs --
+        std::suspend_always final_suspend() noexcept;
+        
+        // -- docs --
+        // template <typename t_TYPE_rv, typename... t_ARGS_rv>
+        // std::suspend_always await_transform(
+        //     coen::pinc::coroutine<t_TYPE_rv, t_ARGS_rv> rhs_coro
+        // );
+
+        // -- docs --
+        std::suspend_always await_transform(
+            coen::pinc::coroutine<t_TYPE, t_ARGS...> rhs_coro
         );
 
-        // ---------------------------------------------------------------------
-        // PINC internal vars
-        // ---------------------------------------------------------------------
-
-        // Scheduler i_scheduler;
-        Pool i_pool;
-    };
-};
-
-
-// -----------------------------------------------------------------------------
-// Types Interface Declaration
-// -----------------------------------------------------------------------------
-
-template <typename t_TYPE, typename... t_ARGS>
-class coen::pinc::Awaitable
-{
-    public:
-        Awaitable();
-        Awaitable(std::function<t_TYPE(t_ARGS...)>);
-        ~Awaitable();
-
-    public:
-        t_TYPE get_result() const;
-        void execute();
-        void suspend();
-        void destroy();
-
-    private:
-        coen::pinc::Future<t_TYPE> m_future;
-        std::tuple<t_ARGS...> m_params;
-        std::function<t_TYPE(t_ARGS...)> m_handle;
-};
-
-
-template <typename... t_ARGS>
-class coen::pinc::Condition
-{
-    public:
-        Condition(const std::function<t_TYPE<t_ARGS...>> predicate);
-        ~Condition();
-
-    public:
-        Awaitable<> wait();
-        void resolve();                                                         // forceful bypass that could be useful during shutdown
+        // -- docs --
+        // std::suspend_always yield_value(
+        //     t_TYPE rhs_value
+        // );
         
+        // -- docs --
+        void return_void();
+
+        // -- docs --
+        void unhandled_exception() noexcept;
+
     private:
-        std::function<bool<t_ARGS...>> m_predicate;
+        coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle m_handle;
 };
 
 
 
-class coen::pinc::Event
+
+
+// -----------------------------------------------------------------------------
+// IMPLEMENATIONS
+// -----------------------------------------------------------------------------
+
+template <typename t_TYPE, typename... t_ARGS>
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::coroutine(
+    coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle handle
+)
 {
-    public:
-        Event();
-        ~Event();
-
-    public:
-        void set();
-        bool is_set();
-        void clear();
-        Awaitable<> wait();
-
-    private:
-        std::atomic_bool m_val;
-};
-
-
-
-template <typename t_TYPE>
-class coen::pinc::Future
-{
-    public:
-        Future();
-        ~Future();
-
-    public:
-        bool is_available() const;
-        void set_value(const t_TYPE value);
-        void set_exception(const std::exception error);
-        t_TYPE get_value() const;
-
-    private:
-        std::atomic_bool m_is_available = false;
-        std::exception m_error;
-        t_TYPE m_value;
-};
-
-
-
-class coen::pinc::Pool
-{
-    public:
-        Pool(const size_t size = 1);
-        void start();
-        void stop(bool force = false);
-        void run_task(const coen::pinc::Task& task, bool lazy = true);
-
-    private:
-        void __runtime(const size_t thread_id);
-
-    private:
-        size_t m_size;
-        std::atomic_bool m_interrupt;
-        std::atomic_uint16_t m_last_used_thread_id;
-
-        std::vector<std::thread> m_pool;
-        std::vector<std::deque<coen::pinc::Task>> m_jobs;
-        std::vector<
-            std::pair<
-                std::unique_ptr<std::mutex>,
-                std::unique_ptr<std::condition_variable>
-            >
-        > m_mxcv;
-};
-
+    m_handle = handle;
+}
 
 
 template <typename t_TYPE, typename... t_ARGS>
-class coen::pinc::Scheduler
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::~coroutine() noexcept
 {
-    public:
-        Scheduler();
-        ~Scheduler();
-
-    public:
-        void start();
-        void stop(bool force = false);
-        void add_task();
-        void add_timer();
-        void add_event();
-
-    private:
-        void __runtime();
-
-    private:
-        std::vector<Awaitable<>> m_event_queue;
-        std::vector<Awaitable<>> m_timer_queue;
-        std::deque<Awaitable<t_TYPE, t_ARGS...> m_task_queue;
-};
+}
 
 
-
-class coen::pinc::Task
+template <typename t_TYPE, typename... t_ARGS>
+uint coen::pinc::coroutine<t_TYPE, t_ARGS...>::destroy()
 {
-    public:
-        Task() {}
-        Task(std::function<void(const uint16_t)>, const uint16_t);
-        void execute() const;
-
-    private:
-        std::function<void(const uint16_t)> m_job;
-        uint16_t m_param;
-};
-
-
-
-class coen::pinc::Timer
-{};
+    try
+    {
+        m_handle.destroy();
+        return 0;
+    }
+    catch (...)
+    {
+        return 1;
+    }
+}
 
 
+template <typename t_TYPE, typename... t_ARGS>
+bool coen::pinc::coroutine<t_TYPE, t_ARGS...>::done()
+{
+    return m_handle.done();
+}
 
-// -----------------------------------------------------------------------------
-// Method Implementations
-// -----------------------------------------------------------------------------
+
+template <typename t_TYPE, typename... t_ARGS>
+uint coen::pinc::coroutine<t_TYPE, t_ARGS...>::resume()
+{
+    if (i_is_resumable())
+    {
+        m_handle.resume();
+        return 0;
+    }
+    return 1;
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+bool coen::pinc::coroutine<t_TYPE, t_ARGS...>::i_is_resumable()
+{
+    return true;   
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+coen::pinc::coroutine<t_TYPE, t_ARGS...> coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::get_return_object()
+{
+    m_handle = pinc::coroutine<t_TYPE, t_ARGS...>::t_handle::from_promise(*this);
+    return pinc::coroutine<t_TYPE, t_ARGS...>(m_handle);
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::initial_suspend()
+{
+    return {};
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::final_suspend() noexcept
+{
+    return {};
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::await_transform(
+    coen::pinc::coroutine<t_TYPE, t_ARGS...> rhs_coro
+)
+{
+    return {};
+}
+
+
+// template <typename t_TYPE, typename... t_ARGS>
+// std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::yield_value(
+//     t_TYPE rhs_value
+// )
+// {
+//     return {};
+// }
+
+
+template <typename t_TYPE, typename... t_ARGS>
+void coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::return_void()
+{
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+void coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::unhandled_exception() noexcept
+{
+}

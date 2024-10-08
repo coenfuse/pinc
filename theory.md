@@ -197,3 +197,481 @@ Which in turn gives an empty stack frame as
 |               | - 00
 
 Exactly what we started with. This means completion of a program.
+
+
+
+
+import asyncio
+import time
+
+def sync_ops():
+    time.sleep(2)
+    return
+
+async def qux():
+    print("qux() - start")
+    print("qux() - suspend on to_thread(sync_ops)")
+    await asyncio.to_thread(sync_ops)
+    print("qux() - resume")
+    print("qux() - exit")
+
+async def baz():
+    print("baz() - start")
+    for _ in range(1000 * 1000 * 500):
+        pass
+    print("baz() - exit")
+    return
+
+async def bar():
+    print("bar() - start")
+    print("bar() - suspend on gather()")
+    await asyncio.gather(*[
+        qux(),
+        baz(),
+    ])
+    print("bar() - resume")
+    print("bar() - exit")
+
+async def ted():
+    print("ted() - start")
+    print("ted() - suspend on sleep(1)")
+    await asyncio.sleep(1)
+    print("ted() - resume")
+    print("ted() - exit")
+    return
+
+async def foo():
+    print("foo() - start")
+    print("foo() - suspend on ted()")
+    await ted()
+    print("foo() - resume")
+
+    print("foo() - suspend on gather()")
+    await asyncio.gather(*[
+        bar(),
+        baz(),
+        qux(),
+        ted()
+    ])
+    print("foo() - resume")
+    print("foo() - exit")
+
+def main():
+    asyncio.run(foo())
+
+main()
+
+
+# CONSOLE OUTPUT [EXPECTED]
+# ------------------------------------------------------------------------------
+# foo() - start
+# foo() - suspend on ted()
+# ted() - start
+# ted() - suspend on sleep(1)
+# ted() - resume
+# ted() - exit
+# foo() - resume
+# foo() - suspend on gather()
+# bar() - start
+# bar() - suspend on gather()
+# baz() - start
+# baz() - exit
+# qux() - start
+# qux() - suspend on to_thread()
+# ted() - start
+# ted() - suspend on sleep()
+# qux() - start
+# qux() - suspend on to_thread()
+# baz() - start
+# baz() - exit
+# qux() - resume
+# qux() - exit
+# qux() - resume
+# qux() - exit
+# bar() - resume
+# bar() - exit
+# ted() - resume
+# ted() - exit
+# foo() - resume
+# foo() - exit
+
+
+# EXECUTION LOG [UNSURE]
+# ------------------------------------------------------------------------------
+# let's have,
+# CS = abbr. for 'call-stack' containing active function calls
+# TQ = abbr. for 'task-queue' containing general coroutines
+# CQ = abbr. for 'conditional-queue' containing coroutines waiting on a condition
+# CM = abbr. for 'context memory' containing local variables
+#
+#
+# 00.000 > push main() in CS
+# CS - [main]
+# TQ - []
+# CQ - []
+# CM - []
+#
+# 00.001 > push asyncio.run() in CS
+# CS - [main > asyncio.run]
+# TQ - []
+# CQ - []
+# CM - []
+#
+# 00.002 > push foo() in TQ
+# CS - [main > asyncio.run]
+# TQ - [foo]
+# CQ - []
+# CM - []
+#
+# 00.003 > pop foo() from TQ
+# CS - [main > asyncio.run > TQ.get]
+# TQ - []
+# CQ - []
+# CM - [foo]
+#
+# 00.004 > push foo()::resume() in CS
+# CS - [main > asyncio.run > foo.resume]
+# TQ - []
+# CQ - []
+# CM - [foo]
+#
+# 00.005 > push await() in CS
+# CS - [main > asyncio.run > foo.resume > await]
+# TQ - []
+# CQ - []
+# CM - [foo]
+# 
+# 00.006 > push ted() in TQ
+# CS - [main > asyncio.run > foo.resume > await > TQ.push]
+# TQ - []
+# CQ - []
+# CM - [foo]
+#
+# 00.007 > pop TQ.push() from CS
+# CS - [main > asyncio.run > foo.resume > await]
+# TQ - [ted]
+# CQ - []
+# CM - [foo]
+#
+# 00.008 > suspend foo() into TQ
+# CS - [main > asyncio.run > foo.resume > await]
+# TQ - [foo > ted]
+# CQ - []
+# CM - []
+# 
+# 00.009 > pop await() from CS
+# CS - [main > asyncio.run > foo.resume]
+# TQ - [foo > ted]
+# CQ - []
+# CM - []
+#
+# 00.009 > pop foo()::resume() from CS since it returned on foo's suspension
+# CS - [main > asyncio.run]
+# TQ - [foo > ted]
+# CQ - []
+# CM - []
+#
+# 00.010 > pop ted() from TQ
+# CS - [main > asyncio.run > TQ.get]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+# 
+# 00.011 > push ted()::resume() in CS
+# CS - [main > asyncio.run > ted.resume]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 00.012 > push await() in CS
+# CS - [main > asyncio.run > ted.resune > await]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 00.013 > push sleep() in CQ
+# CS - [main > asyncio.run > ted.resune > await > CQ.push]
+# TQ - [foo]
+# CQ - [sleep]
+# CM - [ted]
+#
+# 00.014 > pop CQ.push from CS
+# CS - [main > asyncio.run > ted.resume > await]
+# TQ - [foo]
+# CQ - [sleep]
+# CM - [ted]
+#
+# 00.015 > suspend ted() in TQ
+# CS - [main > asyncio.run > ted.resume > await]
+# TQ - [ted > foo]
+# CQ - [sleep]
+# CM - []
+#
+# 00.016 > pop await() from CS
+# CS - [main > asyncio.run > ted.resume]
+# TQ - [ted > foo]
+# CQ - [sleep]
+# CM - []
+#
+# 00.017 > pop ted()::resume() from CS since it returned on ted's suspension
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - [sleep]
+# CM - []
+#
+# 00.018 > pop sleep() from CQ
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+# 
+# 00.019 > push sleep()::is_done() in CS -- basically busy wait :(
+# CS - [main > asyncio.run > sleep.is_done]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 00.020 > pop sleep()::is_done() from CS (returns false)
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 00.021 > push sleep()::set_eval_cycle() in CS -- this tells event loop that it has evaluated this coroutine in this cycle and needs to ignore it until next iteration. Else, it will freeze on infinite loop on CQ starving TQ. The eval flag can be a boolean and scheduler iteration would be either 0 or 1. So any coro set with eval_cycle = 1 will not be run again until the eval_cycle != 1
+# CS - [main > asyncio.run > sleep.set_eval_cycle]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 00.022 > pop sleep()::set_eval_cycle() in CS
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 00.023 > push sleep() in CQ
+# CS - [main > asyncio.run > CQ.push]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 00.024 > pop CQ.push from CS
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - [sleep]
+# CM - []
+#
+# 00.025 > pop foo() into CM
+# CS - [main > asyncio.run > TQ.pop]
+# TQ - [ted > foo]
+# CQ - [sleep]
+# CM - []
+#
+# 00.030 > pop TQ.pop from CS
+# CS - [main > asyncio.run]
+# TQ - [ted]
+# CQ - [sleep]
+# CM - [foo]
+#
+# 00.030 > push foo().is_resumable() in CS
+# CS - [main > asyncio.run > foo.is_resumable]
+# TQ - [ted]
+# CQ - [sleep]
+# CM - [foo]
+#
+# 00.031 > pop foo().is_resumable() from CS [returned false]
+# CS - [main > asyncio.run]
+# TQ - [ted]
+# CQ - [sleep]
+# CM - [foo]
+#
+# 00.032 > push foo() in TQ
+# CS - [main > asyncio.run]
+# TQ - [foo > ted]
+# CQ - [sleep]
+# CM - []
+#
+# 00.033 > pop ted() into CM
+# CS - [main > asyncio.run > TQ.pop]
+# TQ - [foo]
+# CQ - [sleep]
+# CM - [ted]
+#
+# 00.034 > pop TQ.pop from CS
+# CS - [main > asyncio.run]
+# TQ - [foo]
+# CQ - [sleep]
+# CM - [ted]
+#
+# 00.035 > push ted().is_resumable() in CS
+# CS - [main > asyncio.run > ted.is_resumable]
+# TQ - [foo]
+# CQ - [sleep]
+# CM - [ted]
+# 
+# 00.036 - pop ted().is_resumable() from CS [returned false]
+# CS - [main > asyncio.run]
+# TQ - [foo]
+# CQ - [sleep]
+# CM - [ted]
+#
+# 00.037 - push ted() in TQ
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - [sleep]
+# CM - []
+# 
+# -- repeat cycle from 00.018 to 00.037
+# -- until you are at a moment of completion of sleep
+# -- i.e., 01.013 since sleep was created at 00.013
+# 
+# 01.013 - push sleep()::is_done() in CS
+# CS - [main > asyncio.run > sleep.is_done]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 01.014 - pop sleep()::is_done() from CS (returns true)
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 01.015 - push sleep()::execute_cb() in CS
+# CS - [main > asyncio.run > sleep.execute_cb]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 01.016 - push ted().resume() since it was registered as callback in sleep()
+# CS - [main > asyncio.run > sleep.execute_cb > ted.resume]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# -- so sleep() blocked TED for 1.003 seconds (kinda bad)
+# 
+# 01.017 - pop ted.resume() from CS since it returned after execution
+# CS - [main > asyncio.run > sleep.execute_cb]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 01.018 - pop sleep()::execute_cb() from CS
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 01.019 - push sleep()::destroy() in CS to release memory occupied by this coro
+# CS - [main > asyncio.run > sleep.destroy]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 01.020 - pop sleep()::destroy()
+# CS - [main > asyncio.run]
+# TQ - [ted > foo]
+# CQ - []
+# CM - [sleep]
+#
+# 01.021 - pop sleep() from CM
+# CS - [main  > asyncio.run]
+# TQ - [ted > foo]
+# CQ - []
+# CM - []
+# 
+# 01.022 - pop foo() in CM
+# CS - [main > asyncio.run]
+# TQ - [ted]
+# CQ - []
+# CM - [foo]
+#
+# 01.023 - push foo().is_resumable() in CS
+# CS - [main > asyncio.run > foo.is_resumable]
+# TQ - [ted]
+# CQ - []
+# CM - [foo]
+#
+# 01.024 - pop foo().is_resumable() in CS [return false] & pop foo() back into TQ
+# CS - [main > asyncio.run]
+# TQ - [foo > ted]
+# CQ - []
+# CM - []
+#
+# 01.026 - pop ted() into CM
+# CS - [main > asyncio.run]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.027 - push ted()::is_resumable() into CS
+# CS - [main > asyncio.run > ted.is_resumable]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.028 - pop ted()::is_resumable() from CS (returned false)
+# CS - [main > asyncio.run]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.029 - push ted()::is_done() in CS
+# CS - [main > asyncio.run > ted.is_done]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.030 - pop ted()::is_done() from CS (returns true)
+# CS - [main > asyncio.run]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.031 - push ted()::execute_cb() in CS
+# CS - [main > asyncio.run > ted.execute_cb]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.032 - push foo()::resume() in CS since it was registered CB in ted()
+# CS - [main > asyncio.run > ted.execute_cb > foo.resume]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# -- CS and scheduler frozen until foo.resume returns or suspends
+# 
+# 01.033 - push await into CS as foo.resume hits suspension point
+# CS - [main > asyncio.run > ted.execute_cb > foo.resume > await]
+# TQ - [foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.034 - push gather into TQ
+# CS - [main > asyncio.run > ted.execute_cb > foo.resume > await > TQ.push]
+# TQ - [foo.gather > foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.035 - pop TQ.push, await, foo.resume and ted.execute_cb as they are unblocked
+# CS - [main > asyncio.run]
+# TQ - [foo.gather > foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.036 - push ted()::destroy() into CS
+# CS - [main > asyncio.run > ted.destory]
+# TQ - [foo.gather > foo]
+# CQ - []
+# CM - [ted]
+#
+# 01.037 - pop ted()::destory() from CS, delete ted() from CM
+# CS - [main > asyncio.run]
+# TQ - [foo.gather > foo]
+# CQ - []
+# CM - []
+#
+# -- perform gather, populate TQ and repeat as above
+# -- todo
