@@ -191,15 +191,15 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
         std::suspend_always final_suspend() noexcept;
         
         // -- docs --
-        // template <typename t_TYPE_rv, typename... t_ARGS_rv>
-        // std::suspend_always await_transform(
-        //     coen::pinc::coroutine<t_TYPE_rv, t_ARGS_rv> rhs_coro
-        // );
+        template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
+        std::suspend_always await_transform(
+            coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
+        );
 
         // -- docs --
-        std::suspend_always await_transform(
-            coen::pinc::coroutine<t_TYPE, t_ARGS...> rhs_coro
-        );
+        // std::suspend_always await_transform(
+        //     coen::pinc::coroutine<t_TYPE, t_ARGS...> rhs_coro
+        // );
 
         // -- docs --
         std::suspend_always yield_value(
@@ -302,9 +302,19 @@ std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::fina
 }
 
 
+// template <typename t_TYPE, typename... t_ARGS>
+// std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::await_transform(
+//     coen::pinc::coroutine<t_TYPE, t_ARGS...> rhs_coro
+// )
+// {
+//     return {};
+// }
+
+
 template <typename t_TYPE, typename... t_ARGS>
+template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
 std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::await_transform(
-    coen::pinc::coroutine<t_TYPE, t_ARGS...> rhs_coro
+    coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
 )
 {
     return {};
