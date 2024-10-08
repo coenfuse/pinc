@@ -202,9 +202,9 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
         );
 
         // -- docs --
-        // std::suspend_always yield_value(
-        //     t_TYPE rhs_value
-        // );
+        std::suspend_always yield_value(
+            t_TYPE rhs_value
+        );
         
         // -- docs --
         void return_void();
@@ -276,7 +276,7 @@ uint coen::pinc::coroutine<t_TYPE, t_ARGS...>::resume()
 template <typename t_TYPE, typename... t_ARGS>
 bool coen::pinc::coroutine<t_TYPE, t_ARGS...>::i_is_resumable()
 {
-    return true;   
+    return !done();   
 }
 
 
@@ -311,13 +311,13 @@ std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::awai
 }
 
 
-// template <typename t_TYPE, typename... t_ARGS>
-// std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::yield_value(
-//     t_TYPE rhs_value
-// )
-// {
-//     return {};
-// }
+template <typename t_TYPE, typename... t_ARGS>
+std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::yield_value(
+    t_TYPE rhs_value
+)
+{
+    return {};
+}
 
 
 template <typename t_TYPE, typename... t_ARGS>
