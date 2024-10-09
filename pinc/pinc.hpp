@@ -4,8 +4,10 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <coroutine>
 #include <functional>
+#include <optional>
 #include <queue>
 #include <thread>
 
@@ -24,7 +26,7 @@ namespace coen
 
         // -- docs --
         // template <
-        //     typename t_TYPE = void, 
+        //     typename t_TYPE = void,
         //     typename... t_ARGS
         // >
         // class awaiter;
@@ -34,7 +36,7 @@ namespace coen
 
         // -- docs --
         template <
-            typename t_TYPE = void, 
+            typename t_TYPE = void,
             typename... t_ARGS
         >
         class coroutine;
@@ -44,7 +46,7 @@ namespace coen
 
         // -- docs --
         // template <
-        //     typename t_TYPE = void, 
+        //     typename t_TYPE = void,
         //     typename... t_ARGS
         // >
         // class Scheduler;
@@ -73,7 +75,7 @@ namespace coen
 
         // -- docs --
         template <
-            typename t_TYPE = void, 
+            typename t_TYPE = void,
             typename... t_ARGS
         >
         int add_task(
@@ -82,8 +84,8 @@ namespace coen
 
         // -- docs --
         template <
-            typename t_TYPE = void, 
-            size_t t_SIZE = 0, 
+            typename t_TYPE = void,
+            size_t t_SIZE = 0,
             typename... t_ARGS
         >
         coroutine<std::array<t_TYPE, t_SIZE>> gather(
@@ -146,14 +148,21 @@ class coen::pinc::coroutine
     public:
 
         // -- docs --
-        uint resume();
+        uint16_t destroy();
 
         // -- docs --
-        bool done();
+        t_TYPE get_result();
 
         // -- docs --
-        uint destroy();
+        bool is_done();
 
+        // -- docs --
+        uint16_t resume();
+
+        // -- docs --
+        t_TYPE yield_next();
+
+        // -- docs --
         ~coroutine() noexcept;
 
     private:
@@ -174,11 +183,14 @@ class coen::pinc::coroutine
 
 template <
     typename t_TYPE,
-    // typename t_TYPE_rhs,
     typename... t_ARGS
 >
 class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 {
+    // made parent coroutine a friend so that is can access promise's private
+    // member variables
+    friend class coen::pinc::coroutine<t_TYPE, t_ARGS...>;
+
     public:
 
         // -- docs --
@@ -202,13 +214,26 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
         );
         
         // -- docs --
-        void return_void();
+        // void return_void();
+
+        // -- docs --
+        void return_value(
+            t_TYPE rhs_value
+        );
 
         // -- docs --
         void unhandled_exception() noexcept;
 
+        // -- docs --
+        t_TYPE get_return_value() const;
+
+        // -- docs --
+        t_TYPE get_yield_value() const;
+
     private:
         coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle m_handle;
+        t_TYPE m_return_value;
+        t_TYPE m_yield_value;
 };
 
 
@@ -220,7 +245,8 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 // -----------------------------------------------------------------------------
 
 template <typename t_TYPE, typename... t_ARGS>
-coen::pinc::coroutine<t_TYPE, t_ARGS...>::coroutine(
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::coroutine(
     coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle handle
 )
 {
@@ -229,13 +255,16 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>::coroutine(
 
 
 template <typename t_TYPE, typename... t_ARGS>
-coen::pinc::coroutine<t_TYPE, t_ARGS...>::~coroutine() noexcept
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::~coroutine() noexcept
 {
 }
 
 
 template <typename t_TYPE, typename... t_ARGS>
-uint coen::pinc::coroutine<t_TYPE, t_ARGS...>::destroy()
+uint16_t
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::destroy()
 {
     try
     {
@@ -250,14 +279,27 @@ uint coen::pinc::coroutine<t_TYPE, t_ARGS...>::destroy()
 
 
 template <typename t_TYPE, typename... t_ARGS>
-bool coen::pinc::coroutine<t_TYPE, t_ARGS...>::done()
+t_TYPE
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::get_result()
+{
+    return m_handle.promise().get_return_value;
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+bool 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::is_done()
 {
     return m_handle.done();
 }
 
 
 template <typename t_TYPE, typename... t_ARGS>
-uint coen::pinc::coroutine<t_TYPE, t_ARGS...>::resume()
+uint16_t 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::resume()
 {
     if (i_is_resumable())
     {
@@ -269,14 +311,28 @@ uint coen::pinc::coroutine<t_TYPE, t_ARGS...>::resume()
 
 
 template <typename t_TYPE, typename... t_ARGS>
-bool coen::pinc::coroutine<t_TYPE, t_ARGS...>::i_is_resumable()
+t_TYPE
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::yield_next()
 {
-    return !done();   
+    resume();
+    return m_handle.promise().get_yield_value();
 }
 
 
 template <typename t_TYPE, typename... t_ARGS>
-coen::pinc::coroutine<t_TYPE, t_ARGS...> coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::get_return_object()
+bool 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::i_is_resumable()
+{
+    return !is_done();   
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::get_return_object()
 {
     m_handle = pinc::coroutine<t_TYPE, t_ARGS...>::t_handle::from_promise(*this);
     return pinc::coroutine<t_TYPE, t_ARGS...>(m_handle);
@@ -284,14 +340,18 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...> coen::pinc::coroutine<t_TYPE, t_ARGS...
 
 
 template <typename t_TYPE, typename... t_ARGS>
-std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::initial_suspend()
+std::suspend_always 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::initial_suspend()
 {
     return {};
 }
 
 
 template <typename t_TYPE, typename... t_ARGS>
-std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::final_suspend() noexcept
+std::suspend_always 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::final_suspend() noexcept
 {
     return {};
 }
@@ -299,7 +359,9 @@ std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::fina
 
 template <typename t_TYPE, typename... t_ARGS>
 template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
-std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::await_transform(
+std::suspend_always 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::await_transform(
     coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
 )
 {
@@ -308,21 +370,59 @@ std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::awai
 
 
 template <typename t_TYPE, typename... t_ARGS>
-std::suspend_always coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::yield_value(
+std::suspend_always 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::yield_value(
     t_TYPE rhs_value
 )
 {
+    m_yield_value = rhs_value;
     return {};
 }
 
 
+/*
 template <typename t_TYPE, typename... t_ARGS>
-void coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::return_void()
+void 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::return_void()
+{
+}
+*/
+
+
+template <typename t_TYPE, typename... t_ARGS>
+void
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::return_value(
+    t_TYPE rhs_value
+)
+{
+    m_return_value = rhs_value;
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+void 
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::unhandled_exception() noexcept
 {
 }
 
 
 template <typename t_TYPE, typename... t_ARGS>
-void coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type::unhandled_exception() noexcept
+t_TYPE
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::get_return_value() const
 {
+    return m_return_value;
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+t_TYPE
+coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::get_yield_value() const
+{
+    return m_yield_value;
 }

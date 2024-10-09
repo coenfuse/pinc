@@ -4,9 +4,7 @@
 
 coen::pinc::coroutine<int> bar()
 {
-    for (int i = 0; i < 10; i++)
-    {
-        std::cout << "yielding " << i << std::endl;
+    for (int i = 0; i < 10; i++) {
         co_yield i;
     }
 }
@@ -24,10 +22,9 @@ int main()
     std::cout << "in main" << std::endl;
     auto coroutine = bar();
 
-    while (1) {
-        coroutine.resume();
+    while (!coroutine.is_done()) {
+        std::cout << "yielded " << coroutine.yield_next() << std::endl;
     }
 
-    coroutine.resume();
     std::cout << "back in main" << std::endl;
 }
