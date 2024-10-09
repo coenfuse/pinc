@@ -143,7 +143,7 @@ class coen::pinc::coroutine
         class promise_type;
 
         // -- docs --
-        using t_handle = std::coroutine_handle<promise_type>; // <t_TYPE, t_ARGS...>>;
+        using t_handle = std::coroutine_handle<promise_type>;
 
     public:
 
@@ -181,16 +181,51 @@ class coen::pinc::coroutine
 };
 
 
+template <typename... t_ARGS>
+class coen::pinc::coroutine<void, t_ARGS...>
+{
+    public:
+
+        // -- docs --
+        class promise_type;
+
+        // -- docs --
+        using t_handle = std::coroutine_handle<promise_type>;
+
+    public:
+
+        // -- docs --
+        uint16_t destroy();
+
+        // -- docs --
+        bool is_done();
+
+        // -- docs --
+        uint16_t resume();
+
+        // -- docs --
+        ~coroutine() noexcept;
+
+    private:
+
+        // -- docs --
+        bool i_is_resumable();
+
+        // -- docs --
+        explicit coroutine(t_handle handle);
+
+    private:
+        uint m_state;
+        t_handle m_handle;
+};
+
+
 template <
     typename t_TYPE,
     typename... t_ARGS
 >
 class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 {
-    // made parent coroutine a friend so that is can access promise's private
-    // member variables
-    friend class coen::pinc::coroutine<t_TYPE, t_ARGS...>;
-
     public:
 
         // -- docs --
@@ -212,9 +247,6 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
         std::suspend_always yield_value(
             t_TYPE rhs_value
         );
-        
-        // -- docs --
-        // void return_void();
 
         // -- docs --
         void return_value(
@@ -237,7 +269,37 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 };
 
 
+template <typename... t_ARGS>
+class coen::pinc::coroutine<void, t_ARGS...>::promise_type
+{
+    public:
 
+        // -- docs --
+        coen::pinc::coroutine<void, t_ARGS...> get_return_object();
+        
+        // -- docs --
+        std::suspend_always initial_suspend();
+        
+        // -- docs --
+        std::suspend_always final_suspend() noexcept;
+        
+        // -- docs --
+        template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
+        std::suspend_always await_transform(
+            coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
+        );
+
+        // -- docs --
+        
+        // -- docs --
+        void return_void();
+
+        // -- docs --
+        void unhandled_exception() noexcept;
+
+    private:
+        coen::pinc::coroutine<void, t_ARGS...>::t_handle m_handle;
+};
 
 
 // -----------------------------------------------------------------------------
@@ -254,8 +316,25 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>
 }
 
 
+template <typename... t_ARGS>
+coen::pinc::coroutine<void, t_ARGS...>
+::coroutine(
+    coen::pinc::coroutine<void, t_ARGS...>::t_handle handle
+)
+{
+    m_handle = handle;
+}
+
+
 template <typename t_TYPE, typename... t_ARGS>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::~coroutine() noexcept
+{
+}
+
+
+template <typename... t_ARGS>
+coen::pinc::coroutine<void, t_ARGS...>
 ::~coroutine() noexcept
 {
 }
@@ -264,6 +343,24 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>
 template <typename t_TYPE, typename... t_ARGS>
 uint16_t
 coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::destroy()
+{
+    try
+    {
+        m_handle.destroy();
+        return 0;
+    }
+    catch (...)
+    {
+        return 1;
+    }
+}
+
+
+// VOID specialized
+template <typename... t_ARGS>
+uint16_t
+coen::pinc::coroutine<void, t_ARGS...>
 ::destroy()
 {
     try
@@ -296,9 +393,34 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>
 }
 
 
+// VOID specialized
+template <typename... t_ARGS>
+bool 
+coen::pinc::coroutine<void, t_ARGS...>
+::is_done()
+{
+    return m_handle.done();
+}
+
+
 template <typename t_TYPE, typename... t_ARGS>
 uint16_t 
 coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::resume()
+{
+    if (i_is_resumable())
+    {
+        m_handle.resume();
+        return 0;
+    }
+    return 1;
+}
+
+
+// type VOID specialized
+template <typename... t_ARGS>
+uint16_t
+coen::pinc::coroutine<void, t_ARGS...>
 ::resume()
 {
     if (i_is_resumable())
@@ -329,6 +451,16 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>
 }
 
 
+// type VOID specialized
+template <typename... t_ARGS>
+bool
+coen::pinc::coroutine<void, t_ARGS...>
+::i_is_resumable()
+{
+    return !is_done();
+}
+
+
 template <typename t_TYPE, typename... t_ARGS>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
@@ -339,9 +471,30 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 }
 
 
+// type VOID specialized
+template <typename... t_ARGS>
+coen::pinc::coroutine<void, t_ARGS...>
+coen::pinc::coroutine<void, t_ARGS...>::promise_type
+::get_return_object()
+{
+    m_handle = pinc::coroutine<void, t_ARGS...>::t_handle::from_promise(*this);
+    return pinc::coroutine<void, t_ARGS...>(m_handle);
+}
+
+
 template <typename t_TYPE, typename... t_ARGS>
 std::suspend_always 
 coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::initial_suspend()
+{
+    return {};
+}
+
+
+// type VOID specialized
+template <typename... t_ARGS>
+std::suspend_always 
+coen::pinc::coroutine<void, t_ARGS...>::promise_type
 ::initial_suspend()
 {
     return {};
@@ -357,10 +510,33 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 }
 
 
+// type VOID specialized
+template <typename... t_ARGS>
+std::suspend_always 
+coen::pinc::coroutine<void, t_ARGS...>::promise_type
+::final_suspend() noexcept
+{
+    return {};
+}
+
+
 template <typename t_TYPE, typename... t_ARGS>
 template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
 std::suspend_always 
 coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::await_transform(
+    coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
+)
+{
+    return {};
+}
+
+
+// type VOID specialized
+template <typename... t_ARGS>
+template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
+std::suspend_always
+coen::pinc::coroutine<void, t_ARGS...>::promise_type
 ::await_transform(
     coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
 )
@@ -381,14 +557,13 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 }
 
 
-/*
-template <typename t_TYPE, typename... t_ARGS>
+
+template <typename... t_ARGS>
 void 
-coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+coen::pinc::coroutine<void, t_ARGS...>::promise_type
 ::return_void()
 {
 }
-*/
 
 
 template <typename t_TYPE, typename... t_ARGS>
@@ -405,6 +580,15 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 template <typename t_TYPE, typename... t_ARGS>
 void 
 coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
+::unhandled_exception() noexcept
+{
+}
+
+
+// type VOID specialized
+template <typename... t_ARGS>
+void
+coen::pinc::coroutine<void, t_ARGS...>::promise_type
 ::unhandled_exception() noexcept
 {
 }
