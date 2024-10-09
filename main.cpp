@@ -10,10 +10,10 @@ coen::pinc::coroutine<int> bar()
 }
 
 
-coen::pinc::coroutine<> foo()  
+coen::pinc::coroutine<int> foo()  
 {
     std::cout << "in coro" << std::endl;
-    co_return;
+    co_return 5;
 }
 
 
@@ -23,9 +23,10 @@ int main()
     auto coroutine = bar();
     auto coro2 = foo();
     coro2.resume();
+    std::cout << coro2.yield_next().value() << std::endl;
 
     while (!coroutine.is_done()) {
-        std::cout << "yielded " << coroutine.yield_next() << std::endl;
+        std::cout << "yielded " << coroutine.yield_next().value() << std::endl;
     }
 
     std::cout << "back in main" << std::endl;

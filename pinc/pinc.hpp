@@ -45,11 +45,11 @@ namespace coen
         // class Event;
 
         // -- docs --
-        // template <
-        //     typename t_TYPE = void,
-        //     typename... t_ARGS
-        // >
-        // class Scheduler;
+        template <
+            typename t_TYPE = void,
+            typename... t_ARGS
+        >
+        class Scheduler;
 
         // -- docs --
         // class ThreadPool;
@@ -151,7 +151,7 @@ class coen::pinc::coroutine
         uint16_t destroy();
 
         // -- docs --
-        t_TYPE get_result();
+        std::optional<t_TYPE> get_result() const;
 
         // -- docs --
         bool is_done();
@@ -160,7 +160,7 @@ class coen::pinc::coroutine
         uint16_t resume();
 
         // -- docs --
-        t_TYPE yield_next();
+        std::optional<t_TYPE> yield_next();
 
         // -- docs --
         ~coroutine() noexcept;
@@ -257,13 +257,18 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
         void unhandled_exception() noexcept;
 
         // -- docs --
-        t_TYPE get_return_value() const;
+        std::optional<t_TYPE> get_return_value() const;
 
         // -- docs --
-        t_TYPE get_yield_value() const;
+        std::optional<t_TYPE> get_yield_value() const;
 
     private:
         coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle m_handle;
+        
+        // It is not guaranteed that the templated type would provide a default
+        // constructor to promise. Thus we are required to use optional type for
+        // providing response in case a result or yield value is requested before
+        // they are provided to the coroutine
         t_TYPE m_return_value;
         t_TYPE m_yield_value;
 };
@@ -299,6 +304,31 @@ class coen::pinc::coroutine<void, t_ARGS...>::promise_type
 
     private:
         coen::pinc::coroutine<void, t_ARGS...>::t_handle m_handle;
+};
+
+
+template <typename t_TYPE, typename... t_ARGS>
+class coen::pinc::Scheduler
+{
+    public:
+    
+    // -- docs --
+    void start();
+
+    // -- docs --
+    void stop(bool apply_force = false);
+
+    // -- docs --
+    uint16_t add_task(
+        coen::pinc::coroutine<t_TYPE, t_ARGS...> coroutine 
+    );
+
+    // -- EXPERIMENTAL --
+    template <typename Rep, typename Period>
+    uint16_t add_timer(
+        const std::chrono::duration<Rep, Period> &duration,
+        const coen::pinc::coroutine<t_TYPE, t_ARGS...> blocked_routine
+    );
 };
 
 
@@ -376,11 +406,11 @@ coen::pinc::coroutine<void, t_ARGS...>
 
 
 template <typename t_TYPE, typename... t_ARGS>
-t_TYPE
+std::optional<t_TYPE>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>
-::get_result()
+::get_result() const
 {
-    return m_handle.promise().get_return_value;
+    return m_handle.promise().get_return_value();
 }
 
 
@@ -433,7 +463,7 @@ coen::pinc::coroutine<void, t_ARGS...>
 
 
 template <typename t_TYPE, typename... t_ARGS>
-t_TYPE
+std::optional<t_TYPE>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>
 ::yield_next()
 {
@@ -595,7 +625,7 @@ coen::pinc::coroutine<void, t_ARGS...>::promise_type
 
 
 template <typename t_TYPE, typename... t_ARGS>
-t_TYPE
+std::optional<t_TYPE>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 ::get_return_value() const
 {
@@ -604,7 +634,7 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 
 
 template <typename t_TYPE, typename... t_ARGS>
-t_TYPE
+std::optional<t_TYPE>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 ::get_yield_value() const
 {
