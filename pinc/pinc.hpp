@@ -25,11 +25,11 @@ namespace coen
         // ---------------------------------------------------------------------
 
         // -- docs --
-        // template <
-        //     typename t_TYPE = void,
-        //     typename... t_ARGS
-        // >
-        // class awaiter;
+        template <
+            typename t_TYPE = void,
+            typename... t_ARGS
+        >
+        class awaiter;
 
         // template <>
         // class condition;
@@ -59,8 +59,9 @@ namespace coen
         // ---------------------------------------------------------------------
 
         // -- docs --
-        int start(
-            const coroutine<> &coroutine,
+        template <typename t_TYPE, typename... t_ARGS>
+        uint16_t start(
+            coroutine<t_TYPE, t_ARGS...> coroutine,
             size_t poolsize = std::thread::hardware_concurrency()
         );
 
@@ -162,6 +163,9 @@ class coen::pinc::coroutine
         // -- docs --
         std::optional<t_TYPE> yield_next();
 
+        // -- TEMPORARY --
+        coroutine() {}
+
         // -- docs --
         ~coroutine() noexcept;
 
@@ -203,6 +207,9 @@ class coen::pinc::coroutine<void, t_ARGS...>
         // -- docs --
         uint16_t resume();
 
+        // -- TEMPORARY --
+        coroutine() {}
+
         // -- docs --
         ~coroutine() noexcept;
 
@@ -217,6 +224,38 @@ class coen::pinc::coroutine<void, t_ARGS...>
     private:
         uint m_state;
         t_handle m_handle;
+};
+
+
+template <typename t_TYPE, typename... t_ARGS>
+class coen::pinc::awaiter
+{
+    public:
+
+        // -- docs --
+        explicit awaiter(
+            typename coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle handle
+        );
+
+        // -- docs --
+        bool await_ready();
+
+        // -- docs --
+        void await_suspend(
+            std::coroutine_handle<> handle
+            // coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle handle
+        );
+
+        // -- docs --
+        t_TYPE await_resume();
+
+        // -- docs --
+        // ~awaiter();
+
+    private:
+
+        typename coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle m_calle;
+        // coen::pinc::coroutine<t_TYPE, t_ARGS...> m_calle;
 };
 
 
@@ -239,7 +278,7 @@ class coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
         
         // -- docs --
         template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
-        std::suspend_always await_transform(
+        coen::pinc::awaiter<t_TYPE_rhs, t_ARGS_rhs...> await_transform(
             coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
         );
 
@@ -287,10 +326,10 @@ class coen::pinc::coroutine<void, t_ARGS...>::promise_type
         
         // -- docs --
         std::suspend_always final_suspend() noexcept;
-        
+
         // -- docs --
         template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
-        std::suspend_always await_transform(
+        coen::pinc::awaiter<t_TYPE_rhs, t_ARGS_rhs...> await_transform(
             coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
         );
 
@@ -335,6 +374,45 @@ class coen::pinc::Scheduler
 // -----------------------------------------------------------------------------
 // IMPLEMENATIONS
 // -----------------------------------------------------------------------------
+
+template <typename t_TYPE, typename... t_ARGS>
+coen::pinc::awaiter<t_TYPE, t_ARGS...>
+::awaiter(
+    typename coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle handle
+)
+{
+    m_calle = handle;
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+bool
+coen::pinc::awaiter<t_TYPE, t_ARGS...>
+::await_ready()
+{
+    return m_calle.done();
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+void
+coen::pinc::awaiter<t_TYPE, t_ARGS...>
+::await_suspend(
+    std::coroutine_handle<> handle
+)
+{
+    handle.resume();
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
+t_TYPE
+coen::pinc::awaiter<t_TYPE, t_ARGS...>
+::await_resume()
+{
+    return m_calle.promise().get_return_value().value_or(-1);
+}
+
 
 template <typename t_TYPE, typename... t_ARGS>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>
@@ -552,26 +630,31 @@ coen::pinc::coroutine<void, t_ARGS...>::promise_type
 
 template <typename t_TYPE, typename... t_ARGS>
 template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
-std::suspend_always 
+coen::pinc::awaiter<t_TYPE_rhs, t_ARGS_rhs...>
 coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 ::await_transform(
     coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
 )
 {
-    return {};
+    rhs_coro.resume();
+    return coen::pinc::awaiter<t_TYPE_rhs, t_ARGS_rhs...>(
+        rhs_coro.m_handle
+    );
 }
 
 
-// type VOID specialized
 template <typename... t_ARGS>
 template <typename t_TYPE_rhs, typename... t_ARGS_rhs>
-std::suspend_always
+coen::pinc::awaiter<t_TYPE_rhs, t_ARGS_rhs...>
 coen::pinc::coroutine<void, t_ARGS...>::promise_type
 ::await_transform(
     coen::pinc::coroutine<t_TYPE_rhs, t_ARGS_rhs...> rhs_coro
 )
 {
-    return {};
+    rhs_coro.resume();
+    return coen::pinc::awaiter<t_TYPE_rhs, t_ARGS_rhs...>(
+        rhs_coro.m_handle
+    );
 }
 
 
@@ -639,4 +722,21 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 ::get_yield_value() const
 {
     return m_yield_value;
+}
+
+
+// -- TODO -- Implement Scheduler Here
+
+
+template <
+    typename t_TYPE,
+    typename... t_ARGS
+>
+uint16_t coen::pinc::start(
+    coen::pinc::coroutine<t_TYPE, t_ARGS...> coroutine,
+    size_t pool_size 
+)
+{
+    coroutine.resume();
+    return 0;
 }
