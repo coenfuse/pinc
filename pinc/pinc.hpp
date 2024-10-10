@@ -45,6 +45,9 @@ namespace coen
         // class Event;
 
         // -- docs --
+        class generator;
+
+        // -- docs --
         template <
             typename t_TYPE = void,
             typename... t_ARGS

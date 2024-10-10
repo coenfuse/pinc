@@ -17,32 +17,17 @@ pinc::coroutine<int> foo()
 }
 
 pinc::coroutine<int> baz() {
-    co_return co_await foo();
+    co_return co_await bar();
 }
 
 
 pinc::coroutine<int> root() {
-    std::cout << co_await baz() << std::endl;
+    while (true) {
+        std::cout << co_await baz() << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
 }
 
 int main() {
     return pinc::start(root());
 }
-
-// std::cout << "in main" << std::endl;
-// int response = co_await baz();
-// std::cout << "again back in main" << std::endl;
-// std::cout << response << std::endl;
-// std::cout << baz().get_result().value() << std::endl;
-
-/*
-std::cout << "in main" << std::endl;
-auto coroutine = bar();
-auto coro2 = foo();
-coro2.resume();
-std::cout << coro2.yield_next().value() << std::endl;
-while (!coroutine.is_done()) {
-    std::cout << "yielded " << coroutine.yield_next().value() << std::endl;
-}
-std::cout << "back in main" << std::endl;
-*/
