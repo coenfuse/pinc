@@ -166,8 +166,11 @@ class coen::pinc::coroutine
         // -- docs --
         std::optional<t_TYPE> yield_next();
 
+        // -- docs --
+        t_handle get_handle() const;
+
         // -- TEMPORARY --
-        coroutine() {}
+        // coroutine() {}
 
         // -- docs --
         ~coroutine() noexcept;
@@ -210,8 +213,11 @@ class coen::pinc::coroutine<void, t_ARGS...>
         // -- docs --
         uint16_t resume();
 
+        // -- docs --
+        t_handle get_handle() const;
+
         // -- TEMPORARY --
-        coroutine() {}
+        // coroutine() {}
 
         // -- docs --
         ~coroutine() noexcept;
@@ -496,6 +502,24 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>
 
 
 template <typename t_TYPE, typename... t_ARGS>
+typename coen::pinc::coroutine<t_TYPE, t_ARGS...>::t_handle
+coen::pinc::coroutine<t_TYPE, t_ARGS...>
+::get_handle() const
+{
+    return m_handle;
+}
+
+
+template <typename... t_ARGS>
+typename coen::pinc::coroutine<void, t_ARGS...>::t_handle
+coen::pinc::coroutine<void, t_ARGS...>
+::get_handle() const
+{
+    return m_handle;
+}
+
+
+template <typename t_TYPE, typename... t_ARGS>
 bool 
 coen::pinc::coroutine<t_TYPE, t_ARGS...>
 ::is_done()
@@ -641,7 +665,7 @@ coen::pinc::coroutine<t_TYPE, t_ARGS...>::promise_type
 {
     rhs_coro.resume();
     return coen::pinc::awaiter<t_TYPE_rhs, t_ARGS_rhs...>(
-        rhs_coro.m_handle
+        rhs_coro.get_handle()
     );
 }
 
@@ -656,7 +680,7 @@ coen::pinc::coroutine<void, t_ARGS...>::promise_type
 {
     rhs_coro.resume();
     return coen::pinc::awaiter<t_TYPE_rhs, t_ARGS_rhs...>(
-        rhs_coro.m_handle
+        rhs_coro.get_handle()
     );
 }
 

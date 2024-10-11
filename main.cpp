@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 #include "pinc/pinc.hpp"
 
 using namespace coen;
@@ -21,9 +22,10 @@ pinc::coroutine<int> baz() {
 }
 
 
-pinc::coroutine<int> root() {
+pinc::coroutine<> root() {
+    auto generator = bar();
     while (true) {
-        std::cout << co_await baz() << std::endl;
+        std::cout << generator.yield_next().value_or(0) << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
