@@ -2,6 +2,7 @@
 #include <chrono>
 #include <coroutine>
 #include <iostream>
+#include <memory>
 
 // external imports
 // #include "../pinc/pinc.hpp"
@@ -71,47 +72,8 @@ class awaiter;
 template <typename T = void>
 class async;
 
-template <typename T>
+template <typename T = void>
 class promise_type;
-
-
-
-template <typename T>
-class promise_type
-{
-    public:
-    
-    async<T> get_return_object() {
-        std::cout << "creating an awaitable for called from its promise" << std::endl;
-        m_handle = async<T>::t_handle::from_promise(*this);
-        return async<T>(m_handle);
-    }
-    
-    std::suspend_always initial_suspend() {
-        std::cout << "entering coro so called promise.initial_suspend()" << std::endl;
-        return {};
-    }
-
-    std::suspend_always final_suspend() noexcept {
-        std::cout << "existing coro (probably after co_return) so called promise.final_suspend()" << std::endl;
-        return {};
-    }
-    
-    void return_void() noexcept {
-        std::cout << "detected co_return in coro so called promise.return_void()" << std::endl;
-    }
-
-    void unhandled_exception() noexcept {
-    }
-    
-    promise_type() {
-        std::cout << "initializing handle for coro from its promise" << std::endl;
-        // m_handle = async<T>::t_handle::from_promise(*this);
-    }
-
-    private:
-    typename async<T>::t_handle m_handle;
-};
 
 
 template <typename T>
@@ -125,12 +87,12 @@ class async
     }
     
     bool is_done() {
-        return m_handle.done();
+        return m_handle->done();
     }
 
     void resume() {
         std::cout << "resuming coro" << std::endl;
-        return m_handle.resume();
+        return m_handle->resume();
     }
 
     using promise_type = class promise_type<T>;                 // because compiler expects a type 'promise_type' inside coroutine shell
@@ -138,11 +100,53 @@ class async
     friend promise_type;                                        // give this promise_type access to private methods of async
 
     private:
-    async(t_handle handle) {
+    async(t_handle* handle) {
         m_handle = handle;
     }
 
-    t_handle m_handle;
+    t_handle* m_handle;
+};
+
+
+template <typename T>
+class promise_type
+{
+    public:
+    
+    async<T> get_return_object() 
+    {
+        std::cout << "creating an awaitable for called from its promise" << std::endl;
+        mptr_handle = std::make_unique<t_handle>(t_handle::from_promise(*this));
+        return async<T>(mptr_handle.get());
+    }
+    
+    std::suspend_always initial_suspend() 
+    {
+        std::cout << "entering coro so called promise.initial_suspend()" << std::endl;
+        return {};
+    }
+
+    std::suspend_always final_suspend() noexcept 
+    {
+        std::cout << "existing coro (probably after co_return) so called promise.final_suspend()" << std::endl;
+        return {};
+    }
+    
+    void return_void() noexcept {
+        std::cout << "detected co_return in coro so called promise.return_void()" << std::endl;
+    }
+
+    void unhandled_exception() noexcept {
+    }
+    
+    // disabled since we are using get_return_object() as proxy ctor
+    // promise_type() {
+    //     std::cout << "initializing handle for coro from its promise" << std::endl;
+    // }
+
+    private:
+    using t_handle = typename async<T>::t_handle;
+    std::unique_ptr<t_handle> mptr_handle;
 };
 
 
