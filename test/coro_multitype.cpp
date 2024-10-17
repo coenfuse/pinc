@@ -1,6 +1,7 @@
 #include <coroutine>
 #include <iostream>
 #include <memory>
+#include <string>
 
 
 namespace coen 
@@ -318,10 +319,23 @@ T coen::pinc::context<T>::get_return_value() const {
 
 
 
+const int a = 56;
 
-coen::pinc::async<int> node() {
+coen::pinc::async<std::shared_ptr<int>> ptr_node() {
+    std::cout << "ptrnode() - start" << std::endl;
+    co_return std::make_shared<int>(a);
+    std::cout << "ptrnode() - exit" << std::endl;
+}
+
+coen::pinc::async<std::string> str_node() {
+    std::cout << "strnode() - start" << std::endl;
+    co_return "banana";
+    std::cout << "strnode() - exit" << std::endl;
+}
+
+coen::pinc::async<int> node(int input) {
     std::cout << "node() - start" << std::endl;
-    co_return 15;
+    co_return 15 * input;
     std::cout << "node() - exit" << std::endl;
 }
 
@@ -341,14 +355,16 @@ coen::pinc::async<int> branch() {
 
 coen::pinc::async<> root() {
     std::cout << "root() - start" << std::endl;
-    int response = co_await branch() + co_await node();
+    int response = co_await branch() + co_await node(2);
     std::cout << "root() - still" << std::endl;
-    std::cout << response << std::endl;
+    std::cout << response << " " << co_await str_node() << " " << co_await ptr_node() << std::endl;
     std::cout << "root() - exit" << std::endl;
 }
 
 int main() 
 {
+    std::cout << &a << std::endl;
+
     std::cout << "main() - start" << std::endl;
     auto coro = root();
     std::cout << "main() - still" << std::endl;
