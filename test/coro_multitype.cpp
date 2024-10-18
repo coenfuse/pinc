@@ -1,7 +1,11 @@
-#include <coroutine>
-#include <iostream>
-#include <memory>
+#include <coroutine>        // std::coroutine_handle
+#include <exception>
+#include <iostream>         
+#include <memory>           // std::smart_ptr
 #include <string>
+#include <utility>          // std::exchange
+
+
 
 
 namespace coen 
@@ -40,8 +44,10 @@ class coen::pinc::async
         using promise_type = class context<T>;
         using coro_handle  = std::coroutine_handle<promise_type>;
 
-        async(const async& coroutine) = delete;
-        // async(const async&& coroutine);     // TODO 
+        async(const async<T>& other) = delete;
+        async(async<T>&& other) noexcept;
+        async& operator=(const async<T>& other) = delete;
+        async& operator=(async&& other) noexcept;
         ~async() noexcept;
 
     public:
@@ -51,19 +57,18 @@ class coen::pinc::async
         T await_resume() const;
 
         void run() const;       // scheduled to be privatised and only exposed to scheduler
-        void cancel() const;    // ..
         bool is_done() const;   // ..
 
         T get_result() const;   // temporary, remove
 
     private:
 
-        explicit async(coro_handle* ptr_handle);
+        explicit async(coro_handle handle);
 
     private:
 
         std::coroutine_handle<> m_caller_handle;
-        coro_handle* mptr_self_handle = nullptr;
+        coro_handle m_handle;
 };
 
 
@@ -77,8 +82,10 @@ class coen::pinc::async<void>
         using promise_type = class context<>;
         using coro_handle  = std::coroutine_handle<promise_type>;
     
-        async(const async& coroutine) = delete;
-        // async(const async&& coroutine);     // TODO 
+        async(const async<void>& other) = delete;
+        async(async<void>&& other) noexcept;
+        async& operator=(const async<void>& other) = delete;
+        async& operator=(async&& other) noexcept;
         ~async() noexcept;
 
     public:
@@ -88,18 +95,17 @@ class coen::pinc::async<void>
         void await_resume() const;
     
         void run() const;
-        void cancel() const;
         bool is_done() const;
 
 
     private:
 
-        explicit async(coro_handle* ptr_handle);
+        explicit async(coro_handle handle);
 
     private:
 
         std::coroutine_handle<> m_caller_handle;
-        coro_handle* mptr_self_handle = nullptr;
+        coro_handle m_handle;
 };
 
 
@@ -121,9 +127,9 @@ class coen::pinc::context
     public:
 
         async<T> get_return_object();
-        std::suspend_always initial_suspend();
+        std::suspend_always initial_suspend() noexcept;
         std::suspend_always final_suspend() noexcept;
-        void unhandled_exception() noexcept;
+        static void unhandled_exception() noexcept;
         void return_value(const T& to_return) noexcept;
         void return_value(T&& to_return) noexcept;
 
@@ -131,11 +137,6 @@ class coen::pinc::context
 
     private:
 
-        void cancel();
-
-    private:
-
-        std::unique_ptr<coro_handle> muptr_handle;
         T m_return_value;
 };
 
@@ -157,53 +158,91 @@ class coen::pinc::context<void>
     public:
 
         async<void> get_return_object();
-        std::suspend_always initial_suspend();
+        std::suspend_always initial_suspend() noexcept;
         std::suspend_always final_suspend() noexcept;
-        void unhandled_exception() noexcept;
+        static void unhandled_exception() noexcept;
         void return_void() noexcept;
-
-    private:
-
-        void cancel();
-
-    private:
-
-        std::unique_ptr<coro_handle> muptr_handle;
 };
 
 
 
 
 template <typename T>
-coen::pinc::async<T>::async(coro_handle* ptr_handle) {
-    mptr_self_handle = ptr_handle;
+coen::pinc::async<T>::async(coro_handle handle) {
+    m_handle = std::move(handle);
 }
 
 
-coen::pinc::async<void>::async(coro_handle* ptr_handle) {
-    mptr_self_handle = ptr_handle;
+template <typename T>
+coen::pinc::async<T>::async(async<T>&& other) noexcept 
+{
+    m_handle = std::exchange(other.m_handle, {});
+    m_caller_handle = std::exchange(other.m_caller_handle, {});
+}
+
+
+template <typename T>
+coen::pinc::async<T>& coen::pinc::async<T>::operator=(async<T>&& other) noexcept
+{
+    if (this != &other) 
+    {
+        if (m_handle) { m_handle.destroy(); }               // unsafe
+        m_handle = std::exchange(other.m_handle, {});
+        m_caller_handle = std::exchange(other.m_caller_handle, {});
+    }
+    return *this;
+}
+
+
+coen::pinc::async<void>::async(coro_handle handle) {
+    m_handle = std::move(handle);
+}
+
+
+coen::pinc::async<void>::async(async<void>&& other) noexcept
+{
+    m_handle = std::exchange(other.m_handle, {});
+    m_caller_handle = std::exchange(other.m_caller_handle, {});
+}
+
+
+coen::pinc::async<void>& coen::pinc::async<void>::operator=(async<void>&& other) noexcept
+{
+    if (this != &other)
+    {
+        if (m_handle) { m_handle.destroy(); }               // unsafe
+        m_handle = std::exchange(other.m_handle, {});
+        m_caller_handle = std::exchange(other.m_caller_handle, {});
+    }
+    return *this;
 }
 
 
 template <typename T>
 coen::pinc::async<T>::~async() noexcept {
-    mptr_self_handle = nullptr;
+    if (is_done()) {
+        std::cout << "[WARN] -- PINC -- destroying an unfinished coroutine returning " << m_handle.promise().m_return_value << std::endl;
+    }
+    m_handle.destroy();
 }
 
 
 coen::pinc::async<void>::~async() noexcept {
-    mptr_self_handle = nullptr;
+    if (is_done()) {
+        std::cout << "[WARN] -- PINC -- destroying an unfinished coroutine returinig void" << std::endl;
+    }
+    m_handle.destroy();
 }
 
 
 template <typename T>
 bool coen::pinc::async<T>::await_ready() const noexcept {
-    return this->is_done();
+    return is_done();
 }
 
 
 bool coen::pinc::async<void>::await_ready() const noexcept {
-    return this->is_done();
+    return is_done();
 }
 
 
@@ -212,9 +251,9 @@ void coen::pinc::async<T>::await_suspend(
     std::coroutine_handle<> caller_handle
 )
 {
-    m_caller_handle = std::move(caller_handle);        // this may break when I disable copy ctor for async
-    this->run();
-    if (mptr_self_handle->done()) {         // may need to add a special case for awaiting on generators
+    m_caller_handle = std::move(caller_handle);
+    run();
+    if (is_done()) {         // may need to add a special case for awaiting on generators
         m_caller_handle.resume();
     }
 }
@@ -224,9 +263,9 @@ void coen::pinc::async<void>::await_suspend(
     std::coroutine_handle<> caller_handle
 )
 {
-    m_caller_handle = std::move(caller_handle);        // this may break when I disable copy ctor for async
-    this->run();
-    if (mptr_self_handle->done()) {         // may need to add a special case for awaiting on generators
+    m_caller_handle = std::move(caller_handle);
+    run();
+    if (is_done()) {         // may need to add a special case for awaiting on generators
         m_caller_handle.resume();
     }
 }
@@ -234,7 +273,7 @@ void coen::pinc::async<void>::await_suspend(
 
 template <typename T>
 T coen::pinc::async<T>::await_resume() const {
-    return mptr_self_handle->promise().get_return_value();
+    return m_handle.promise().get_return_value();
 }
 
 
@@ -244,65 +283,54 @@ void coen::pinc::async<void>::await_resume() const {
 
 template <typename T>
 void coen::pinc::async<T>::run() const {
-    mptr_self_handle->resume();
+    if (!is_done()) {
+        m_handle.resume();
+    }
 }
 
 
 void coen::pinc::async<void>::run() const {
-    mptr_self_handle->resume();
-}
-
-
-template <typename T>
-void coen::pinc::async<T>::cancel() const {
-    mptr_self_handle->promise().cancel();
-}
-
-
-void coen::pinc::async<void>::cancel() const {
-    mptr_self_handle->promise().cancel();
+    if (!is_done()) {
+        m_handle.resume();
+    }
 }
 
 
 template <typename T>
 bool coen::pinc::async<T>::is_done() const {
-    return mptr_self_handle->done();
+    return m_handle.done();
 }
 
 
 bool coen::pinc::async<void>::is_done() const {
-    return mptr_self_handle->done();
+    return m_handle.done();
 }
 
 
 template <typename T>
 T coen::pinc::async<T>::get_result() const {
-    return this->await_resume();
+    return await_resume();
 }
 
 
 template <typename T>
-coen::pinc::async<T> coen::pinc::context<T>::get_return_object()
-{
-    muptr_handle = std::make_unique<coro_handle>(coro_handle::from_promise(*this));
-    return async<T>(muptr_handle.get());
+coen::pinc::async<T> coen::pinc::context<T>::get_return_object() {
+    return async<T>(coro_handle::from_promise(*this));
 }
 
 
-coen::pinc::async<void> coen::pinc::context<void>::get_return_object()
-{
-    muptr_handle = std::make_unique<coro_handle>(coro_handle::from_promise(*this));
-    return async<void>(muptr_handle.get());
+coen::pinc::async<void> coen::pinc::context<void>::get_return_object() {
+    return async<void>(coro_handle::from_promise(*this));
 }
 
 
 template <typename T>
-std::suspend_always coen::pinc::context<T>::initial_suspend() {
+std::suspend_always coen::pinc::context<T>::initial_suspend() noexcept {
     return {};
 }
 
 
-std::suspend_always coen::pinc::context<void>::initial_suspend() {
+std::suspend_always coen::pinc::context<void>::initial_suspend() noexcept {
     return {};
 }
 
@@ -320,7 +348,7 @@ std::suspend_always coen::pinc::context<void>::final_suspend() noexcept {
 
 template <typename T>
 void coen::pinc::context<T>::unhandled_exception() noexcept {
-    std::terminate();       // remove this and handle better
+    std::terminate();
 }
 
 
@@ -331,14 +359,12 @@ void coen::pinc::context<void>::unhandled_exception() noexcept {
 
 template <typename T>
 void coen::pinc::context<T>::return_value(const T& to_return) noexcept {
-    std::cout << "copying ref" << std::endl;
     m_return_value = to_return;
 }
 
 
 template <typename T>
 void coen::pinc::context<T>::return_value(T&& to_return) noexcept {
-    std::cout << "moving" << std::endl;
     m_return_value = std::move(to_return);
 }
 
@@ -350,19 +376,6 @@ void coen::pinc::context<void>::return_void() noexcept {
 template <typename T>
 T coen::pinc::context<T>::get_return_value() const {
     return m_return_value;
-}
-
-
-template <typename T>
-void coen::pinc::context<T>::cancel() {
-    // *(muptr_handle).destroy();
-    muptr_handle.reset();
-}
-
-
-void coen::pinc::context<void>::cancel() {
-    // *(muptr_handle).destroy();
-    muptr_handle.reset();
 }
 
 
@@ -387,20 +400,20 @@ class custom
         return *this;
     }
 };
+
+
 const int a = 56;
 
 
-
-
-coen::pinc::async<custom> custom_node() {
-    co_return custom();                                 // rvalue
-}
-
-coen::pinc::async<std::shared_ptr<int>> ptr_node() {
-    std::cout << "ptrnode() - start" << std::endl;
-    co_return std::make_shared<int>(a);                 // rvalue
-    std::cout << "ptrnode() - exit" << std::endl;
-}
+// coen::pinc::async<custom> custom_node() {
+//     co_return custom();                                 // rvalue
+// }
+// 
+// coen::pinc::async<std::shared_ptr<int>> ptr_node() {
+//     std::cout << "ptrnode() - start" << std::endl;
+//     co_return std::make_shared<int>(a);                 // rvalue
+//     std::cout << "ptrnode() - exit" << std::endl;
+// }
 
 coen::pinc::async<std::string> str_node() {
     std::cout << "strnode() - start" << std::endl;
@@ -432,9 +445,10 @@ coen::pinc::async<> root() {
     std::cout << "root() - start" << std::endl;
     int response = co_await branch() + co_await node(2);
     std::cout << "root() - still" << std::endl;
-    std::cout << response << " " << co_await str_node() << " " << co_await ptr_node() << std::endl;
-    custom obj = co_await custom_node();
+    std::cout << response << " " << co_await str_node() << " " << std::endl; // co_await ptr_node() << std::endl;
+    // custom obj = co_await custom_node();
     std::cout << "root() - exit" << std::endl;
+    co_return;
 }
 
 int main() 
