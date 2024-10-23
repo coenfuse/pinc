@@ -2,7 +2,10 @@
 #include <exception>
 #include <iostream>         
 #include <memory>           // std::smart_ptr
+#include <optional>
+#include <queue>
 #include <string>
+#include <thread>
 #include <utility>          // std::exchange
 
 
@@ -12,6 +15,12 @@ namespace coen
 {
     namespace pinc
     {
+        // ---------------------------------------------------------------------
+        // module types
+        // ---------------------------------------------------------------------
+
+        class async_base;
+
         // -- docs --
         template <typename T = void>
         class async;
@@ -21,12 +30,27 @@ namespace coen
         class context;
 
         // -- docs --
-        template <typename T = void>
-        class generator;
+        // template <typename T>
+        // class generator;
 
         // -- docs --
-        template <typename T = void>
+        // template <typename T = void>
         class scheduler;
+
+        // ---------------------------------------------------------------------
+        // event loop APIs
+        // ---------------------------------------------------------------------
+
+        // -- docs --
+        uint16_t start(
+            async_base awaitable,
+            size_t poolsize = std::thread::hardware_concurrency()
+        );
+
+        // -- docs --
+        int stop(
+            bool force = true
+        );
 
     } // namespace pinc
 
@@ -43,6 +67,7 @@ class coen::pinc::async
         friend class context<T>;
         using promise_type = class context<T>;
         using coro_handle  = std::coroutine_handle<promise_type>;
+        // using value_type   = T;
 
         async(const async<T>& other) = delete;
         async(async<T>&& other) noexcept;
@@ -164,6 +189,76 @@ class coen::pinc::context<void>
         void return_void() noexcept;
 };
 
+
+
+// pending thought on whether generator can await on a coroutine or not since if
+// it does then it must be bound to the scheduler. And if it is, then it yield
+// support and generators in general should be implemented within async<T>::context
+// Refer to example, https://en.cppreference.com/w/cpp/coroutine/coroutine_handle
+/*
+template <typename T>
+class coen::pinc::generator
+{
+    public:
+
+    private:
+
+    class context;
+    class iterator;
+};
+
+
+
+template <typename T>
+class coen::pinc::generator<T>::context
+{
+    public:
+
+        friend class generator<T>;
+        using coro_handle = typename generator<T>::coro_handle;
+
+        // ctors and dtors
+
+    public:
+
+        generator<T> get_return_object();
+        static std::suspend_always initial_suspend() noexcept;
+        static std::suspend_always final_suspend() noexcept;
+        static void unhandled_exception() noexcept;
+        std::suspend_always yield_value(T value) noexcept;
+
+    private:
+
+        std::optional<T> m_current_value;
+};
+
+
+
+class iterator
+{
+};
+*/
+
+
+
+class coen::pinc::scheduler
+{
+    public:
+
+        explicit scheduler() noexcept;
+        explicit scheduler(const scheduler& context) = delete;
+        explicit scheduler(const scheduler&& context) = delete;  
+        ~scheduler() noexcept;
+
+    public:
+    
+        int16_t add_task(async_base task);
+        // int16_t add_timer();
+
+    private:
+
+        std::queue<async_base> m_tasks;
+};
 
 
 
