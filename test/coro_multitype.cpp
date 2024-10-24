@@ -43,14 +43,14 @@ namespace coen
 
         // -- docs --
         uint16_t start(
-            async_base awaitable,
+            std::unique_ptr<async_base> task,
             size_t poolsize = std::thread::hardware_concurrency()
         );
 
         // -- docs --
-        int stop(
-            bool force = true
-        );
+        // uint16_t stop(
+        //     bool force = true
+        // );
 
     } // namespace pinc
 
@@ -58,9 +58,21 @@ namespace coen
 
 
 
+class coen::pinc::async_base
+{
+    public:
+
+        virtual bool await_ready() const noexcept = 0;
+        virtual void await_suspend(std::coroutine_handle<> caller_handle) = 0;
+        virtual void run() const = 0;
+        virtual bool is_done() const = 0;
+};
+
+
+
 
 template <typename T>
-class coen::pinc::async
+class coen::pinc::async : public coen::pinc::async_base
 {
     public:
         
@@ -77,14 +89,14 @@ class coen::pinc::async
 
     public:
 
-        bool await_ready() const noexcept;
-        void await_suspend(std::coroutine_handle<> caller_handle);
+        bool await_ready() const noexcept override;
+        void await_suspend(std::coroutine_handle<> caller_handle) override;
         T await_resume() const;
 
-        void run() const;       // scheduled to be privatised and only exposed to scheduler
-        bool is_done() const;   // ..
+        void run() const override;       // scheduled to be privatised and only exposed to scheduler
+        bool is_done() const override;   // ..
 
-        T get_result() const;   // temporary, remove
+        T get_result() const;            // temporary, remove
 
     private:
 
@@ -99,7 +111,7 @@ class coen::pinc::async
 
 
 template <>
-class coen::pinc::async<void>
+class coen::pinc::async<void> : public coen::pinc::async_base
 {
     public:
 
@@ -115,13 +127,12 @@ class coen::pinc::async<void>
 
     public:
 
-        bool await_ready() const noexcept;
-        void await_suspend(std::coroutine_handle<> caller_handle);
+        bool await_ready() const noexcept override;
+        void await_suspend(std::coroutine_handle<> caller_handle) override;
         void await_resume() const;
     
-        void run() const;
-        bool is_done() const;
-
+        void run() const override;          // scheduled to be privatised and only exposed to scheduler
+        bool is_done() const override;      // ..
 
     private:
 
@@ -252,12 +263,15 @@ class coen::pinc::scheduler
 
     public:
     
-        int16_t add_task(async_base task);
-        // int16_t add_timer();
+        void add_task(std::unique_ptr<async_base> task);
+        void add_timer();
+        void start();
+        void stop();
 
     private:
 
-        std::queue<async_base> m_tasks;
+        std::queue<std::unique_ptr<async_base>> mptr_tasks;
+        bool m_interrupt = true;
 };
 
 
@@ -474,6 +488,59 @@ T coen::pinc::context<T>::get_return_value() const {
 }
 
 
+coen::pinc::scheduler::scheduler() noexcept {
+}
+
+
+coen::pinc::scheduler::~scheduler() noexcept {
+}
+
+
+void coen::pinc::scheduler::add_task(std::unique_ptr<async_base> task) {
+    mptr_tasks.push(std::move(task));
+}
+
+
+void coen::pinc::scheduler::add_timer() {
+}
+
+
+void coen::pinc::scheduler::start() {
+    m_interrupt = false;
+    while (!m_interrupt && !mptr_tasks.empty()) {
+        try {
+            auto& task = mptr_tasks.front();
+            if (!task->is_done()) {
+                task->run();
+            }
+            else {
+                mptr_tasks.pop();
+            }
+        }
+        catch (...) {
+        }
+    }
+}
+
+
+void coen::pinc::scheduler::stop() {
+    m_interrupt = false;
+}
+
+
+uint16_t coen::pinc::start(
+    std::unique_ptr<async_base> task,
+    size_t pool_size
+)
+{
+    scheduler evloop = scheduler();
+    evloop.add_task(std::move(task));
+    evloop.start();
+    return 0;
+}
+
+
+
 
 class custom
 {
@@ -548,11 +615,12 @@ coen::pinc::async<> root() {
 
 int main() 
 {
-    std::cout << &a << std::endl;
+    coen::pinc::start(std::make_unique<coen::pinc::async<>>(root()));
 
-    std::cout << "main() - start" << std::endl;
-    auto coro = root();
-    std::cout << "main() - still" << std::endl;
-    coro.run();
-    std::cout << "main() - exit" << std::endl;
+    // std::cout << &a << std::endl;
+    // std::cout << "main() - start" << std::endl;
+    // auto coro = root();
+    // std::cout << "main() - still" << std::endl;
+    // coro.run();
+    // std::cout << "main() - exit" << std::endl;
 }
